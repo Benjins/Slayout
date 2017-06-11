@@ -422,8 +422,8 @@ bool SolveFormula(BNSexpr* sexpr, LayoutContext* ctx, float* outVal) {
 		else if (MatchSexpr(sexpr, "(@{id} @{} @{})", {&op, &arg1, &arg2})) {
 			float a1, a2;
 			if (SolveFormula(&arg1, ctx, &a1) && SolveFormula(&arg2, ctx, &a2)) {
-				return true;
 				*outVal = ComputeOperator(op.AsBNSexprIdentifier().identifier, a1, a2);
+				return true;
 			}
 			else {
 				return false;
@@ -551,6 +551,22 @@ LayoutValue* GetLayoutValueX(LayoutNode* node) {
 	else if (node->IsLayoutPage()) {
 		return &node->AsLayoutPage().x;
 	}
+	else if (node->IsLayoutPoint()) {
+		return &node->AsLayoutPoint().x;
+	}
+	else {
+		ASSERT(false);
+		return nullptr;
+	}
+}
+
+LayoutValue* GetLayoutValueWidth(LayoutNode* node) {
+	if (node->IsLayoutRect()) {
+		return &node->AsLayoutRect().width;
+	}
+	else if (node->IsLayoutPage()) {
+		return &node->AsLayoutPage().width;
+	}
 	else {
 		ASSERT(false);
 		return nullptr;
@@ -584,8 +600,15 @@ LayoutSolverResult StepLayoutVerb(LayoutContext* ctx, LayoutVerb* verb) {
 
 		ASSERT(item->IsLayoutRect());
 		LayoutValue* xValue = GetLayoutValueX(ref);
-		if (xValue->IsLayoutValueSimple()) {
-			float val = xValue->AsLayoutValueSimple().val;
+		LayoutValue* wValueRef  = GetLayoutValueWidth(ref);
+		LayoutValue* wValueItem = GetLayoutValueWidth(item);
+		if (xValue->IsLayoutValueSimple()
+		 && wValueRef->IsLayoutValueSimple()
+		 && wValueItem->IsLayoutValueSimple()) {
+			float refX = xValue->AsLayoutValueSimple().val;
+			float refW = wValueRef->AsLayoutValueSimple().val;
+			float itemW = wValueItem->AsLayoutValueSimple().val;
+			float val = refX + (refW / 2) - (itemW / 2);
 			item->AsLayoutRect().x = LayoutValueSimple(val);
 			return LSR_Success;
 		}
@@ -675,6 +698,22 @@ int main(){
 
 		if (res == LSR_Success) {
 			printf("Success!\n");
+			BNS_VEC_FOREACH(ctx.nodes) {
+				if (ptr->IsLayoutRect()) {
+					printf("Rect %.*s:\n", BNS_LEN_START(ptr->name));
+					printf("\tx: %f:\n", ptr->AsLayoutRect().x.AsLayoutValueSimple().val);
+					printf("\ty: %f:\n", ptr->AsLayoutRect().y.AsLayoutValueSimple().val);
+					printf("\tw: %f:\n", ptr->AsLayoutRect().width.AsLayoutValueSimple().val);
+					printf("\th: %f:\n", ptr->AsLayoutRect().height.AsLayoutValueSimple().val);
+				}
+				else if (ptr->IsLayoutPage()) {
+					printf("Page %.*s:\n", BNS_LEN_START(ptr->name));
+					printf("\tx: %f:\n", ptr->AsLayoutPage().x.AsLayoutValueSimple().val);
+					printf("\ty: %f:\n", ptr->AsLayoutPage().y.AsLayoutValueSimple().val);
+					printf("\tw: %f:\n", ptr->AsLayoutPage().width.AsLayoutValueSimple().val);
+					printf("\th: %f:\n", ptr->AsLayoutPage().height.AsLayoutValueSimple().val);
+				}
+			}
 		}
 		else if (res == LSR_NoProgress){
 			printf("Solver could not make progress!\n");
