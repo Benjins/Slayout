@@ -1,0 +1,21 @@
+(text (name  h) (contents "QWERTYUIOPASDFGH, eh sorta.") 
+                (font-size 16) 
+				(width (/ (width page) 2)) 
+				(height 30) 
+				(y (- (height page) (margin-top page))))
+
+(image (name b1) (src "top_1.bmp"))
+(image (name b2) (src "top_2.bmp"))
+(image (name b3) (src "top_3.bmp"))
+
+(align-x (ref page) (item h) (align centre))
+(align-x (ref page) (item r1) (align centre))
+
+(row (name r1)
+     (padding 10)
+     (spacing 20)
+     (elements b1 b2 b3) 
+     (height (* 2 (height h)))
+     (width (- (width page) (/ (* 3 (x h)) 2))))
+	 
+(beneath (top h) (bottom r1) (spacing 20))
