@@ -81,7 +81,7 @@ struct LayoutTextNode {
 
 struct LayoutImageNode {
 	LayoutNode* node;
-	SubString text;
+	SubString imgName;
 };
 
 struct LayoutAlignX{
@@ -263,9 +263,24 @@ void LayoutContextVerbsPass(const Vector<BNSexpr>& sexprs, LayoutContext* ctx) {
 			ASSERT(node != nullptr);
 			LayoutImageNode img;
 			img.node = node;
-			LayoutVerb verb;
-			verb = img;
-			ctx->verbs.PushBack(verb);
+			BNSexpr imgSrc;
+			if (ExtractSubSexprByName(&args, "src", &imgSrc)) {
+				if (imgSrc.IsBNSexprString()){
+					img.imgName = imgSrc.AsBNSexprString().value;
+
+					LayoutVerb verb;
+					verb = img;
+					ctx->verbs.PushBack(verb);
+				}
+				else {
+					printf("src attribute on image node needs to be a string.\n");
+					ASSERT(false);
+				}
+			}
+			else {
+					printf("An image node needs to have its src specified.\n");
+					ASSERT(false);
+			}
 		}
 		else if (MatchSexpr(ptr, "(row @{} @{...})", { &args })) {
 			SubString name;
@@ -324,7 +339,7 @@ void LayoutContextVerbsPass(const Vector<BNSexpr>& sexprs, LayoutContext* ctx) {
 						ExtractLayoutValueFromSexpr(&spacing, &beneath.spacing);
 					}
 					else {
-						beneath.spacing = LayoutValueSimple();
+						beneath.spacing = LayoutValueSimple(0);
 					}
 
 					LayoutVerb verb;
@@ -623,12 +638,15 @@ LayoutSolverResult StepLayoutVerb(LayoutContext* ctx, LayoutVerb* verb) {
 		ASSERT(above->IsLayoutRect());
 		ASSERT(below->IsLayoutRect());
 
+		LayoutValue* spacing = &verb->AsLayoutBeneath().spacing;
+
 		if (above->AsLayoutRect().y.IsLayoutValueSimple()
-		 && above->AsLayoutRect().height.IsLayoutValueSimple()) {
+		 && above->AsLayoutRect().height.IsLayoutValueSimple()
+		 && spacing->IsLayoutValueSimple()) {
 			float y = above->AsLayoutRect().y.AsLayoutValueSimple().val;
 			float height = above->AsLayoutRect().height.AsLayoutValueSimple().val;
 			float val = y - height;
-			below->AsLayoutRect().y = LayoutValueSimple(y - height);
+			below->AsLayoutRect().y = LayoutValueSimple(y - height - spacing->AsLayoutValueSimple().val);
 			return LSR_Success;
 		}
 		else {
@@ -675,6 +693,59 @@ LayoutSolverResult StepLayoutContextSolver(LayoutContext* ctx) {
 	return needMore ? (progress ? LSR_SomeProgress : LSR_NoProgress) : LSR_Success;
 }
 
+#include "slayout_gfx.cpp"
+
+void RenderLayoutToBMP(LayoutContext* ctx, const char* fileName) {
+	LayoutNode* node = GetLayoutNodeByName(ctx, STATIC_TO_SUBSTRING("page"));
+
+	BitmapData data;
+	data.width  = node->AsLayoutPage().width.AsLayoutValueSimple().val;
+	data.height = node->AsLayoutPage().height.AsLayoutValueSimple().val;
+	data.data = (int*)malloc(data.width * data.height * sizeof(int));
+
+	BNS_VEC_FOREACH(ctx->verbs) {
+		if (ptr->IsLayoutTextNode()) {
+			LayoutNode* node = ptr->AsLayoutTextNode().node;
+			int x = node->AsLayoutRect().x.AsLayoutValueSimple().val;
+			int y = node->AsLayoutRect().y.AsLayoutValueSimple().val;
+			int width = node->AsLayoutRect().width.AsLayoutValueSimple().val;
+			int height = node->AsLayoutRect().height.AsLayoutValueSimple().val;
+			for (int i = 0; i < width; i++) {
+				data.data[y * data.width + x + i] = 0xFF4488FF;
+				data.data[(y - height) * data.width + x + i] = 0xFF4488FF;
+			}
+			for (int i = 0; i < height; i++) {
+				data.data[(y - i) * data.width + x] = 0xFF4488FF;
+				data.data[(y - i) * data.width + x + width] = 0xFF4488FF;
+			}
+		}
+		else if (ptr->IsLayoutImageNode()) {
+			LayoutNode* node = ptr->AsLayoutImageNode().node;
+			int x = node->AsLayoutRect().x.AsLayoutValueSimple().val;
+			int y = node->AsLayoutRect().y.AsLayoutValueSimple().val;
+			int width = node->AsLayoutRect().width.AsLayoutValueSimple().val;
+			int height = node->AsLayoutRect().height.AsLayoutValueSimple().val;
+
+			SubString imgNameSubStr = ptr->AsLayoutImageNode().imgName;
+			// Chomp off the quotes
+			imgNameSubStr.start++;
+			imgNameSubStr.length -= 2;
+			StringStackBuffer<256> imgName("%.*s", BNS_LEN_START(imgNameSubStr));
+			BitmapData imgData = LoadBMPFromFile(imgName.buffer);
+			if (imgData.data == nullptr) {
+				printf("Error, could not open file '%s'", imgName.buffer);
+				ASSERT(false);
+			}
+			else {
+				BlitBitmap(data, x, data.height - y, width, height, imgData);
+			}
+		}
+	}
+
+	WriteBMPToFile(data, fileName);
+	free(data.data);
+}
+
 int main(){
 	const char* fileName = "test.slt";
 	String fileContents = ReadStringFromFile(fileName);
@@ -714,6 +785,10 @@ int main(){
 					printf("\th: %f:\n", ptr->AsLayoutPage().height.AsLayoutValueSimple().val);
 				}
 			}
+
+			const char* fileName = "output/slayout.bmp";
+			printf("Writeing out result to '%s'\n", fileName);
+			RenderLayoutToBMP(&ctx, fileName);
 		}
 		else if (res == LSR_NoProgress){
 			printf("Solver could not make progress!\n");

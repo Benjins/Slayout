@@ -1,14 +1,21 @@
-(text (name  h) (contents "QWERTYUIOPASDFGH, eh sorta.") 
+(text (name h) (contents "QWERTYUIOPASDFGH, eh sorta.") 
+               (font-size 16) 
+			   (width (/ (width page) 2)) 
+			   (height 30) 
+			   (y (- (height page) (margin-top page))))
+				
+(text (name h2) (contents "Another header: '!@#'.") 
                 (font-size 16) 
-				(width (/ (width page) 2)) 
+				(width (/ (width page) 3)) 
 				(height 30) 
 				(y (- (height page) (margin-top page))))
 
-(image (name b1) (src "top_1.bmp"))
-(image (name b2) (src "top_2.bmp"))
-(image (name b3) (src "top_3.bmp"))
+(image (name b1) (src "img/top_1.bmp"))
+(image (name b2) (src "img/top_2.bmp"))
+(image (name b3) (src "img/top_3.bmp"))
 
-(align-x (ref page) (item h) (align centre))
+(align-x (ref page) (item h)  (align centre))
+(align-x (ref page) (item h2) (align centre))
 (align-x (ref page) (item r1) (align centre))
 
 (row (name r1)
@@ -19,3 +26,5 @@
      (width (- (width page) (/ (* 3 (x h)) 2))))
 	 
 (beneath (top h) (bottom r1) (spacing 20))
+
+(beneath (top r1) (bottom h2) (spacing 20))
