@@ -171,8 +171,9 @@ void RenderTextToBitmap(const SubString& text, float* currX, float* currY,
 		stbtt_GetCodepointHMetrics(&font, c, &advanceWidth, &leftSideBearing);
 		float xAdv = scale * advanceWidth;
 
-		if (charBmp.data != nullptr)
-		BlitBitmap(pageBmp, (int)*currX + x0, (pageBmp.height - (int)*currY + y0) + h, x1 - x0, y1 - y0, charBmp);
+		if (charBmp.data != nullptr) {
+			BlitBitmap(pageBmp, (int)*currX + x0, (pageBmp.height - (int)*currY + y0) + h, x1 - x0, y1 - y0, charBmp);
+		}
 
 		*currX += xAdv;
 
