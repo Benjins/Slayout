@@ -5,6 +5,9 @@
 #include "../CppUtils/assert.cpp"
 #include "../CppUtils/strings.cpp"
 #include "../CppUtils/sexpr.cpp"
+#include "../CppUtils/stringmap.cpp"
+#include "../CppUtils/filesys.cpp"
+#include "../CppUtils/hash.cpp"
 
 struct LayoutValue;
 
@@ -76,7 +79,7 @@ struct LayoutNode : LayoutNodeData {
 
 struct LayoutTextNode {
 	LayoutNode* node;
-	SubString text;
+	BNSexpr text;
 };
 
 struct LayoutImageNode {
@@ -252,9 +255,24 @@ void LayoutContextVerbsPass(const Vector<BNSexpr>& sexprs, LayoutContext* ctx) {
 			ASSERT(node != nullptr);
 			LayoutTextNode txt;
 			txt.node = node;
-			LayoutVerb verb;
-			verb = txt;
-			ctx->verbs.PushBack(verb);
+			BNSexpr unusedSexpr;
+			BNSexpr* contentsSexpr = nullptr;
+			BNS_VEC_FOREACH(args.AsBNSexprParenList().children) {
+				if (MatchSexpr(ptr, "(contents @{} @{...})", { &unusedSexpr })) {
+					contentsSexpr = ptr;
+					break;
+				}
+			}
+			if (contentsSexpr != nullptr) {
+				txt.text = *contentsSexpr;
+				LayoutVerb verb;
+				verb = txt;
+				ctx->verbs.PushBack(verb);
+			}
+			else {
+				printf("Text node requires 'contents' attribute.\n");
+				ASSERT(false);
+			}
 		}
 		else if (MatchSexpr(ptr, "(image @{} @{...})", { &args })) {
 			SubString name;
@@ -694,6 +712,41 @@ LayoutSolverResult StepLayoutContextSolver(LayoutContext* ctx) {
 }
 
 #include "slayout_gfx.cpp"
+#include "slayout_text.cpp"
+
+bool ParseTextContentsForTextEvents(BNSexpr* sexpr, Vector<LayoutTextEvent>* events) {
+	BNSexpr rest;
+	BNSexpr fontSize;
+	if (MatchSexpr(sexpr, "(contents @{} @{...})", { &rest })) {
+		bool isGood = true;
+		BNS_VEC_FOREACH(rest.AsBNSexprParenList().children) {
+			isGood &= ParseTextContentsForTextEvents(ptr, events);
+		}
+
+		return isGood;
+	}
+	else if (MatchSexpr(sexpr, "(font-size @{num} @{} @{...})", { &fontSize, &rest })) {
+		// TODO: This. Also all the others.
+		ASSERT(false);
+		return false;
+	}
+	else if (sexpr->IsBNSexprString()) {
+		LayoutTextEventDrawText txt;
+		txt.text = sexpr->AsBNSexprString().value;
+		// Chomp quotes
+		txt.text.start++;
+		txt.text.length -= 2;
+		LayoutTextEvent evt;
+		evt = txt;
+		events->PushBack(evt);
+
+		return true;
+	}
+	else {
+		ASSERT(false);
+		return false;
+	}
+}
 
 void RenderLayoutToBMP(LayoutContext* ctx, const char* fileName) {
 	LayoutNode* node = GetLayoutNodeByName(ctx, STATIC_TO_SUBSTRING("page"));
@@ -703,20 +756,35 @@ void RenderLayoutToBMP(LayoutContext* ctx, const char* fileName) {
 	data.height = node->AsLayoutPage().height.AsLayoutValueSimple().val;
 	data.data = (int*)malloc(data.width * data.height * sizeof(int));
 
+	LayoutRenderingContext rc;
+	InitLayoutRenderingContext(&rc);
+
 	BNS_VEC_FOREACH(ctx->verbs) {
 		if (ptr->IsLayoutTextNode()) {
 			LayoutNode* node = ptr->AsLayoutTextNode().node;
-			int x = node->AsLayoutRect().x.AsLayoutValueSimple().val;
-			int y = node->AsLayoutRect().y.AsLayoutValueSimple().val;
-			int width = node->AsLayoutRect().width.AsLayoutValueSimple().val;
-			int height = node->AsLayoutRect().height.AsLayoutValueSimple().val;
-			for (int i = 0; i < width; i++) {
-				data.data[y * data.width + x + i] = 0xFF4488FF;
-				data.data[(y - height) * data.width + x + i] = 0xFF4488FF;
+
+			float x = node->AsLayoutRect().x.AsLayoutValueSimple().val;
+			float y = node->AsLayoutRect().y.AsLayoutValueSimple().val;
+			float w = node->AsLayoutRect().width.AsLayoutValueSimple().val;
+			float h = node->AsLayoutRect().height.AsLayoutValueSimple().val;
+
+			for (int i = 0; i < h; i++) {
+				data.data[((int)y - i) * data.width + (int)x] = 0xFF4488FF;
+				data.data[((int)y - i) * data.width + (int)x + (int)w] = 0xFF4488FF;
 			}
-			for (int i = 0; i < height; i++) {
-				data.data[(y - i) * data.width + x] = 0xFF4488FF;
-				data.data[(y - i) * data.width + x + width] = 0xFF4488FF;
+
+			for (int i = 0; i < w; i++) {
+				data.data[(int)y * data.width + (int)x + i] = 0xFF4488FF;
+				data.data[((int)y - (int)h) * data.width + (int)x + i] = 0xFF4488FF;
+			}
+
+			Vector<LayoutTextEvent> events;
+			bool good = ParseTextContentsForTextEvents(&ptr->AsLayoutTextNode().text, &events);
+			if (good) {
+				RenderTextEventsToBitmap(events, x, y, w, h, &rc, data);
+			}
+			else {
+				ASSERT(false);
 			}
 		}
 		else if (ptr->IsLayoutImageNode()) {
@@ -731,7 +799,7 @@ void RenderLayoutToBMP(LayoutContext* ctx, const char* fileName) {
 			imgNameSubStr.start++;
 			imgNameSubStr.length -= 2;
 			StringStackBuffer<256> imgName("%.*s", BNS_LEN_START(imgNameSubStr));
-			BitmapData imgData = LoadBMPFromFile(imgName.buffer);
+			BitmapData imgData = rc.GetImage(imgName.buffer);
 			if (imgData.data == nullptr) {
 				printf("Error, could not open file '%s'", imgName.buffer);
 				ASSERT(false);
