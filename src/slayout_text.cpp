@@ -25,10 +25,18 @@ struct LayoutTextStyle {
 
 struct LayoutTextEventDrawText {
 	SubString text;
+
+	explicit LayoutTextEventDrawText(const SubString& _text) {
+		text = _text;
+	}
 };
 
 struct LayoutTextEventChangeFont {
-	SubString text;
+	SubString fontName;
+
+	explicit LayoutTextEventChangeFont(const SubString& _fontName) {
+		fontName = _fontName;
+	}
 };
 
 struct LayoutTextEventChangeJustify {
@@ -202,7 +210,7 @@ void RenderTextEventsToBitmap(const Vector<LayoutTextEvent>& events, float x, fl
 	BNS_VEC_FOREACH(events) {
 		LayoutTextStyle currStyle = rc->GetCurrentStyle();
 		if (ptr->IsLayoutTextEventChangeFont()) {
-			currStyle.fontName = ptr->AsLayoutTextEventChangeFont().text;
+			currStyle.fontName = ptr->AsLayoutTextEventChangeFont().fontName;
 			rc->PushStyle(currStyle);
 		}
 		else if (ptr->IsLayoutTextEventChangeScale()) {

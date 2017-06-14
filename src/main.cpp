@@ -734,15 +734,51 @@ bool ParseColor(SubString colorText, int* outColVal) {
 	}
 }
 
+SubString ChompQuotesOffString(SubString str) {
+	ASSERT(str.length >= 2);
+	ASSERT(str.start[0] == '"');
+	ASSERT(str.start[str.length - 1] == '"');
+	str.start++;
+	str.length -= 2;
+
+	return str;
+}
+
 bool ParseTextContentsForTextEvents(BNSexpr* sexpr, Vector<LayoutTextEvent>* events) {
 	BNSexpr rest;
-	BNSexpr fontSize;
+	BNSexpr fontSize, fontName;
 	BNSexpr col;
 	if (MatchSexpr(sexpr, "(contents @{} @{...})", { &rest })) {
 		bool isGood = true;
 		BNS_VEC_FOREACH(rest.AsBNSexprParenList().children) {
 			isGood &= ParseTextContentsForTextEvents(ptr, events);
 		}
+
+		return isGood;
+	}
+	else if (MatchSexpr(sexpr, "(font @{str} @{num} @{} @{...})", { &fontName, &fontSize, &rest })) {
+		events->PushBack(LayoutTextEventChangeFont(ChompQuotesOffString(fontSize.AsBNSexprString().value)));
+		events->PushBack(LayoutTextEventChangeScale(fontSize.AsBNSexprNumber().CoerceDouble()));
+
+		bool isGood = true;
+		BNS_VEC_FOREACH(rest.AsBNSexprParenList().children) {
+			isGood &= ParseTextContentsForTextEvents(ptr, events);
+		}
+
+		events->PushBack(LayoutTextEventPopStyle());
+		events->PushBack(LayoutTextEventPopStyle());
+
+		return isGood;
+	}
+	else if (MatchSexpr(sexpr, "(font @{str} @{} @{...})", { &fontName, &rest })) {
+		events->PushBack(LayoutTextEventChangeFont(ChompQuotesOffString(fontName.AsBNSexprString().value)));
+
+		bool isGood = true;
+		BNS_VEC_FOREACH(rest.AsBNSexprParenList().children) {
+			isGood &= ParseTextContentsForTextEvents(ptr, events);
+		}
+
+		events->PushBack(LayoutTextEventPopStyle());
 
 		return isGood;
 	}
@@ -778,13 +814,7 @@ bool ParseTextContentsForTextEvents(BNSexpr* sexpr, Vector<LayoutTextEvent>* eve
 		}
 	}
 	else if (sexpr->IsBNSexprString()) {
-		LayoutTextEventDrawText txt;
-		txt.text = sexpr->AsBNSexprString().value;
-		// Chomp quotes
-		txt.text.start++;
-		txt.text.length -= 2;
-		events->PushBack(txt);
-
+		events->PushBack(LayoutTextEventDrawText(ChompQuotesOffString(sexpr->AsBNSexprString().value)));
 		return true;
 	}
 	else {

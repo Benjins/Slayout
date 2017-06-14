@@ -1,14 +1,16 @@
-(text (name h) (contents "QWERTYUIOPASDFGH, eh sorta " (font-size 18 "YO" (color #FF33FF (font-size 36 "O")) (color #555555 "O") "O") " ...sup") 
+(text (name h) (contents "QWERTYUIOP"
+                         (font "fonts/VeraBd.ttf" "ASDFGH, eh sorta ") 
+                         (font-size 18 "YO" (color #FF33FF (font-size 36 "O")) (color #555555 "O") "O") " ...sup") 
                (font-size 16) 
-			   (width (/ (width page) 2)) 
-			   (height 30) 
-			   (y (- (height page) (margin-top page))))
-				
+               (width (/ (width page) 2)) 
+               (height 30) 
+               (y (- (height page) (margin-top page))))
+                
 (text (name h2) (contents "Another header: '!@#'.") 
                 (font-size 16) 
-				(width (/ (width page) 3)) 
-				(height 30) 
-				(y (- (height page) (margin-top page))))
+                (width (/ (width page) 3)) 
+                (height 30) 
+                (y (- (height page) (margin-top page))))
 
 (image (name b1) (src "img/top_1.bmp"))
 (image (name b2) (src "img/top_2.bmp"))
@@ -24,7 +26,7 @@
      (elements b1 b2 b3) 
      (height (* 2 (height h)))
      (width (- (width page) (/ (* 3 (x h)) 2))))
-	 
+     
 (beneath (top h) (bottom r1) (spacing 20))
 
 (beneath (top r1) (bottom h2) (spacing 20))
