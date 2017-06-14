@@ -714,9 +714,30 @@ LayoutSolverResult StepLayoutContextSolver(LayoutContext* ctx) {
 #include "slayout_gfx.cpp"
 #include "slayout_text.cpp"
 
+bool ParseColor(SubString colorText, int* outColVal) {
+	ASSERT(outColVal != nullptr);
+	if (colorText.length > 1 && colorText.start[0] == '#') {
+		colorText.start++;
+		colorText.length--;
+		// TODO: Also length 3 colors
+		if (colorText.length == 6) {
+			// TODO: Validate we actually have a hex val
+			*outColVal = HexAtoi(StringStackBuffer<16>("%.*s", BNS_LEN_START(colorText)).buffer);
+			return true;
+		}
+		else {
+			return false;
+		}
+	}
+	else {
+		return false;
+	}
+}
+
 bool ParseTextContentsForTextEvents(BNSexpr* sexpr, Vector<LayoutTextEvent>* events) {
 	BNSexpr rest;
 	BNSexpr fontSize;
+	BNSexpr col;
 	if (MatchSexpr(sexpr, "(contents @{} @{...})", { &rest })) {
 		bool isGood = true;
 		BNS_VEC_FOREACH(rest.AsBNSexprParenList().children) {
@@ -726,9 +747,35 @@ bool ParseTextContentsForTextEvents(BNSexpr* sexpr, Vector<LayoutTextEvent>* eve
 		return isGood;
 	}
 	else if (MatchSexpr(sexpr, "(font-size @{num} @{} @{...})", { &fontSize, &rest })) {
-		// TODO: This. Also all the others.
-		ASSERT(false);
-		return false;
+		events->PushBack(LayoutTextEventChangeScale(fontSize.AsBNSexprNumber().CoerceDouble()));
+
+		bool isGood = true;
+		BNS_VEC_FOREACH(rest.AsBNSexprParenList().children) {
+			isGood &= ParseTextContentsForTextEvents(ptr, events);
+		}
+
+		events->PushBack(LayoutTextEventPopStyle());
+
+		return isGood;
+	}
+	else if (MatchSexpr(sexpr, "(color @{id} @{} @{...})", { &col, &rest })) {
+		int colVal;
+		if (ParseColor(col.AsBNSexprIdentifier().identifier, &colVal)) {
+			events->PushBack(LayoutTextEventChangeColor(colVal));
+
+			bool isGood = true;
+			BNS_VEC_FOREACH(rest.AsBNSexprParenList().children) {
+				isGood &= ParseTextContentsForTextEvents(ptr, events);
+			}
+
+			events->PushBack(LayoutTextEventPopStyle());
+
+			return isGood;
+		}
+		else {
+			ASSERT(false);
+			return false;
+		}
 	}
 	else if (sexpr->IsBNSexprString()) {
 		LayoutTextEventDrawText txt;
@@ -736,9 +783,7 @@ bool ParseTextContentsForTextEvents(BNSexpr* sexpr, Vector<LayoutTextEvent>* eve
 		// Chomp quotes
 		txt.text.start++;
 		txt.text.length -= 2;
-		LayoutTextEvent evt;
-		evt = txt;
-		events->PushBack(evt);
+		events->PushBack(txt);
 
 		return true;
 	}

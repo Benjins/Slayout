@@ -37,10 +37,18 @@ struct LayoutTextEventChangeJustify {
 
 struct LayoutTextEventChangeScale{
 	float scale;
+
+	explicit LayoutTextEventChangeScale(float _scale) {
+		scale = _scale;
+	}
 };
 
 struct LayoutTextEventChangeColor {
 	int color;
+
+	explicit LayoutTextEventChangeColor(int _color) {
+		color = _color;
+	}
 };
 
 struct LayoutTextEventPopStyle {
