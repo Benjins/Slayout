@@ -87,6 +87,10 @@ struct LayoutImageNode {
 	SubString imgName;
 };
 
+struct LayoutRectNode {
+	LayoutNode* node;
+};
+
 struct LayoutAlignX{
 	LayoutNode* ref;
 	LayoutNode* item;
@@ -105,6 +109,7 @@ struct LayoutRow {
 
 #define DISC_MAC(mac)    \
 	mac(LayoutTextNode)  \
+	mac(LayoutRectNode)  \
 	mac(LayoutImageNode) \
 	mac(LayoutAlignX)    \
 	mac(LayoutBeneath)   \
@@ -208,6 +213,18 @@ void LayoutContextSkeletonPass(const Vector<BNSexpr>& sexprs, LayoutContext* ctx
 				ASSERT(false);
 			}
 		}
+		else if (MatchSexpr(ptr, "(rect @{} @{...})", { &args })) {
+			if (ExtractorNameFromSexprs(&args, &node.name)) {
+				LayoutRect rect;
+				ExtractXYWH(&args, &rect);
+				node.Assign(rect);
+				ctx->nodes.PushBack(node);
+			}
+			else {
+				printf("rect node requires a name!");
+				ASSERT(false);
+			}
+		}
 		else if (MatchSexpr(ptr, "(row @{} @{...})", { &args })) {
 			if (ExtractorNameFromSexprs(&args, &node.name)) {
 				LayoutRect rect;
@@ -280,6 +297,16 @@ void LayoutContextVerbsPass(const Vector<BNSexpr>& sexprs, LayoutContext* ctx) {
 					printf("An image node needs to have its src specified.\n");
 					ASSERT(false);
 			}
+		}
+		else if (MatchSexpr(ptr, "(rect @{} @{...})", { &args })) {
+			SubString name;
+			ExtractorNameFromSexprs(&args, &name);
+			LayoutNode* node = GetLayoutNodeByName(ctx, name);
+			ASSERT(node != nullptr);
+
+			LayoutRectNode rect;
+			rect.node = node;
+			ctx->verbs.PushBack(rect);
 		}
 		else if (MatchSexpr(ptr, "(row @{} @{...})", { &args })) {
 			SubString name;
@@ -589,6 +616,11 @@ LayoutSolverResult StepLayoutVerb(LayoutContext* ctx, LayoutVerb* verb) {
 	}
 	else if (verb->IsLayoutImageNode()) {
 		LayoutNode* node = verb->AsLayoutImageNode().node;
+		ASSERT(node->IsLayoutRect());
+		return StepLayoutNode(node, ctx);
+	}
+	else if (verb->IsLayoutRectNode()) {
+		LayoutNode* node = verb->AsLayoutRectNode().node;
 		ASSERT(node->IsLayoutRect());
 		return StepLayoutNode(node, ctx);
 	}
