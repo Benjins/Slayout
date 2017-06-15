@@ -751,10 +751,19 @@ SubString ChompQuotesOffString(SubString str) {
 	return str;
 }
 
+LayoutTextJustification ParseJustification(const SubString& name) {
+	if (name == "left") { return LTJ_Left; }
+	else if (name == "right") { return LTJ_Right; }
+	else if (name == "centre") { return LTJ_Centre; }
+	else if (name == "full") { return LTJ_FullJustify; }
+	else { ASSERT(false); return LTJ_Left; }
+}
+
 bool ParseTextContentsForTextEvents(BNSexpr* sexpr, Vector<LayoutTextEvent>* events) {
 	BNSexpr rest;
 	BNSexpr fontSize, fontName;
 	BNSexpr col;
+	BNSexpr justification;
 	if (MatchSexpr(sexpr, "(text @{} @{...})", { &rest })) {
 		BNSexpr unusedSexpr;
 		BNSexpr* contentsSexpr;
@@ -820,6 +829,18 @@ bool ParseTextContentsForTextEvents(BNSexpr* sexpr, Vector<LayoutTextEvent>* eve
 	}
 	else if (MatchSexpr(sexpr, "(font-size @{num} @{} @{...})", { &fontSize, &rest })) {
 		events->PushBack(LayoutTextEventChangeScale(fontSize.AsBNSexprNumber().CoerceDouble()));
+
+		bool isGood = true;
+		BNS_VEC_FOREACH(rest.AsBNSexprParenList().children) {
+			isGood &= ParseTextContentsForTextEvents(ptr, events);
+		}
+
+		events->PushBack(LayoutTextEventPopStyle());
+
+		return isGood;
+	}
+	else if (MatchSexpr(sexpr, "(justify @{id} @{} @{...})", { &justification, &rest })) {
+		events->PushBack(LayoutTextEventChangeJustify(ParseJustification(justification.AsBNSexprIdentifier().identifier)));
 
 		bool isGood = true;
 		BNS_VEC_FOREACH(rest.AsBNSexprParenList().children) {

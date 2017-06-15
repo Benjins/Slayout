@@ -1,6 +1,7 @@
-(text (name h) (contents "QWERTYUIOP"
-                         (font "fonts/VeraBd.ttf" 8 "ASDFGH, eh sorta ") 
-                         (font-size 18 "YO" (color #FF33FF (font-size 36 "O")) (color #555555 "O") "O") " ...sup") 
+(text (name h) (contents (justify right 
+							"QWERTYUIOP"
+							(font "fonts/VeraBd.ttf" 8 "ASDFGH, eh sorta ") 
+							(font-size 18 "YO" (color #FF33FF (font-size 36 "O")) (color #555555 "O") "O") " ...sup")) 
                (font-size 16)
                (width (/ (width page) 2)) 
                (height 30) 
@@ -20,9 +21,9 @@
 (align-x (ref page) (item h2) (align centre))
 (align-x (ref page) (item r1) (align centre))
 
-(rect (name rec) (y (/ (height page) 2)) (width (/ (width page) 8)) (height 50))
+(rect (name rec) (y (/ (height page) 2)) (width (+ 0 (/ (width page) 8))) (height 50))
 
-(text (name rec-tex) (contents "LDUF the only way out is forward I think therefore I am you know?") (x (x rec)) (y (y rec)) (width (width rec)) (height (height rec)))
+(text (name rec-tex) (contents (justify centre "LDUF the only way out is forward I think therefore I am you know?")) (x (x rec)) (y (y rec)) (width (width rec)) (height (height rec)))
 
 (align-x (ref page) (item rec))
 
