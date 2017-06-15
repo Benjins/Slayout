@@ -255,24 +255,8 @@ void LayoutContextVerbsPass(const Vector<BNSexpr>& sexprs, LayoutContext* ctx) {
 			ASSERT(node != nullptr);
 			LayoutTextNode txt;
 			txt.node = node;
-			BNSexpr unusedSexpr;
-			BNSexpr* contentsSexpr = nullptr;
-			BNS_VEC_FOREACH(args.AsBNSexprParenList().children) {
-				if (MatchSexpr(ptr, "(contents @{} @{...})", { &unusedSexpr })) {
-					contentsSexpr = ptr;
-					break;
-				}
-			}
-			if (contentsSexpr != nullptr) {
-				txt.text = *contentsSexpr;
-				LayoutVerb verb;
-				verb = txt;
-				ctx->verbs.PushBack(verb);
-			}
-			else {
-				printf("Text node requires 'contents' attribute.\n");
-				ASSERT(false);
-			}
+			txt.text = *ptr;
+			ctx->verbs.PushBack(txt);
 		}
 		else if (MatchSexpr(ptr, "(image @{} @{...})", { &args })) {
 			SubString name;
@@ -285,10 +269,7 @@ void LayoutContextVerbsPass(const Vector<BNSexpr>& sexprs, LayoutContext* ctx) {
 			if (ExtractSubSexprByName(&args, "src", &imgSrc)) {
 				if (imgSrc.IsBNSexprString()){
 					img.imgName = imgSrc.AsBNSexprString().value;
-
-					LayoutVerb verb;
-					verb = img;
-					ctx->verbs.PushBack(verb);
+					ctx->verbs.PushBack(img);
 				}
 				else {
 					printf("src attribute on image node needs to be a string.\n");
@@ -319,9 +300,7 @@ void LayoutContextVerbsPass(const Vector<BNSexpr>& sexprs, LayoutContext* ctx) {
 				}
 			}
 
-			LayoutVerb verb;
-			verb = row;
-			ctx->verbs.PushBack(verb);
+			ctx->verbs.PushBack(row);
 		}
 		else if (MatchSexpr(ptr, "(align-x @{} @{...})", { &args })) {
 			BNSexpr ref, item;
@@ -330,9 +309,7 @@ void LayoutContextVerbsPass(const Vector<BNSexpr>& sexprs, LayoutContext* ctx) {
 					LayoutAlignX alignX;
 					alignX.ref  = GetLayoutNodeByName(ctx,  ref.AsBNSexprIdentifier().identifier);
 					alignX.item = GetLayoutNodeByName(ctx, item.AsBNSexprIdentifier().identifier);
-					LayoutVerb verb;
-					verb = alignX;
-					ctx->verbs.PushBack(verb);
+					ctx->verbs.PushBack(alignX);
 				}
 				else {
 					printf("malformed align-x item");
@@ -360,9 +337,7 @@ void LayoutContextVerbsPass(const Vector<BNSexpr>& sexprs, LayoutContext* ctx) {
 						beneath.spacing = LayoutValueSimple(0);
 					}
 
-					LayoutVerb verb;
-					verb = beneath;
-					ctx->verbs.PushBack(verb);
+					ctx->verbs.PushBack(beneath);
 				}
 				else {
 					printf("malformed align-x item");
@@ -748,7 +723,36 @@ bool ParseTextContentsForTextEvents(BNSexpr* sexpr, Vector<LayoutTextEvent>* eve
 	BNSexpr rest;
 	BNSexpr fontSize, fontName;
 	BNSexpr col;
-	if (MatchSexpr(sexpr, "(contents @{} @{...})", { &rest })) {
+	if (MatchSexpr(sexpr, "(text @{} @{...})", { &rest })) {
+		BNSexpr unusedSexpr;
+		BNSexpr* contentsSexpr;
+		BNSexpr fontSize;
+		int stylePushCount = 0;
+		BNS_VEC_FOREACH(rest.AsBNSexprParenList().children) {
+			if (MatchSexpr(ptr, "(contents @{} @{...})", { &unusedSexpr })) {
+				contentsSexpr = ptr;
+			}
+			else if (MatchSexpr(ptr, "(font-size @{num})", { &fontSize })) {
+				events->PushBack(LayoutTextEventChangeScale(fontSize.AsBNSexprNumber().CoerceDouble()));
+				stylePushCount++;
+			}
+		}
+
+		if (contentsSexpr == nullptr) {
+			ASSERT_WARN("%s", "Error: text node requires contents node.");
+			return false;
+		}
+		else {
+			bool isGood = ParseTextContentsForTextEvents(contentsSexpr, events);
+
+			for (int i = 0; i < stylePushCount; i++) {
+				events->PushBack(LayoutTextEventPopStyle());
+			}
+
+			return isGood;
+		}
+	}
+	else if (MatchSexpr(sexpr, "(contents @{} @{...})", { &rest })) {
 		bool isGood = true;
 		BNS_VEC_FOREACH(rest.AsBNSexprParenList().children) {
 			isGood &= ParseTextContentsForTextEvents(ptr, events);
@@ -757,7 +761,7 @@ bool ParseTextContentsForTextEvents(BNSexpr* sexpr, Vector<LayoutTextEvent>* eve
 		return isGood;
 	}
 	else if (MatchSexpr(sexpr, "(font @{str} @{num} @{} @{...})", { &fontName, &fontSize, &rest })) {
-		events->PushBack(LayoutTextEventChangeFont(ChompQuotesOffString(fontSize.AsBNSexprString().value)));
+		events->PushBack(LayoutTextEventChangeFont(ChompQuotesOffString(fontName.AsBNSexprString().value)));
 		events->PushBack(LayoutTextEventChangeScale(fontSize.AsBNSexprNumber().CoerceDouble()));
 
 		bool isGood = true;

@@ -1,7 +1,7 @@
 (text (name h) (contents "QWERTYUIOP"
-                         (font "fonts/VeraBd.ttf" "ASDFGH, eh sorta ") 
+                         (font "fonts/VeraBd.ttf" 8 "ASDFGH, eh sorta ") 
                          (font-size 18 "YO" (color #FF33FF (font-size 36 "O")) (color #555555 "O") "O") " ...sup") 
-               (font-size 16) 
+               (font-size 16)
                (width (/ (width page) 2)) 
                (height 30) 
                (y (- (height page) (margin-top page))))
