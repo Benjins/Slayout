@@ -63,17 +63,33 @@ struct LayoutTextEventPopStyle {
 
 };
 
+struct LayoutTextEventLineBreak {
+
+};
+
 #define DISC_MAC(mac) \
 	mac(LayoutTextEventDrawText) \
 	mac(LayoutTextEventChangeJustify) \
 	mac(LayoutTextEventChangeFont) \
 	mac(LayoutTextEventChangeScale) \
 	mac(LayoutTextEventChangeColor) \
+	mac(LayoutTextEventLineBreak) \
 	mac(LayoutTextEventPopStyle)
 
 DEFINE_DISCRIMINATED_UNION(LayoutTextEvent, DISC_MAC)
 
 #undef DISC_MAC
+
+struct LayoutRenderTextLineInfo {
+	float totalWidth;
+	int wordCount;
+	float height;
+
+	LayoutRenderTextLineInfo() {
+		totalWidth = 0.0f;
+		wordCount = 0;
+	}
+};
 
 struct LayoutRenderingContext {
 	StringMap<stbtt_fontinfo> loadedFonts;
@@ -136,6 +152,102 @@ struct LayoutRenderingContext {
 	}
 };
 
+void LayoutTextForEvent(SubString text, Vector<LayoutTextEvent>* newEvents, float* currX,
+	float startX, float w, const LayoutTextStyle& currStyle, LayoutRenderingContext* rc) {
+
+	stbtt_fontinfo font = rc->GetFont(StringStackBuffer<256>("%.*s", BNS_LEN_START(currStyle.fontName)).buffer);
+	float pixelScale = currStyle.scale;
+	float scale = stbtt_ScaleForPixelHeight(&font, pixelScale);
+
+	int latestWhitespaceCharIdx = 0;
+	for (int i = 0; i < text.length; i++) {
+		char c = text.start[i];
+		// TODO: Hard line breaks?
+		if (c == ' ') {
+			latestWhitespaceCharIdx = i;
+		}
+
+		int x0, y0, x1, y1;
+		stbtt_GetCodepointBitmapBox(&font, c, scale, scale, &x0, &y0, &x1, &y1);
+
+		int advanceWidth = 0, leftSideBearing = 0;
+		stbtt_GetCodepointHMetrics(&font, c, &advanceWidth, &leftSideBearing);
+		float xAdv = scale * advanceWidth;
+
+		if (*currX + x1 > startX + w) {
+			// Need to break line
+			SubString start = text, rest = text;
+			if (latestWhitespaceCharIdx > 0) {
+				start.length = latestWhitespaceCharIdx;
+				rest.start += (latestWhitespaceCharIdx + 1);
+				rest.length -= (latestWhitespaceCharIdx + 1);
+
+				*currX = startX;
+
+				newEvents->PushBack(LayoutTextEventDrawText(start));
+				newEvents->PushBack(LayoutTextEventLineBreak());
+				text = rest;
+				i = 0;
+			}
+			else {
+				// Uhhh....
+				ASSERT(false);
+			}
+		}
+		else {
+			*currX += xAdv;
+		}
+	}
+
+	newEvents->PushBack(LayoutTextEventDrawText(text));
+}
+
+void LayoutTextEvents(const Vector<LayoutTextEvent>& events, Vector<LayoutTextEvent>* newEvents, float x, float w, LayoutRenderingContext* rc, 
+							  Vector<LayoutRenderTextLineInfo>* outLineInfo) {
+	float currX = x;
+	BNS_VEC_FOREACH(events) {
+		bool addEvent = true;
+		LayoutTextStyle currStyle = rc->GetCurrentStyle();
+		if (ptr->IsLayoutTextEventChangeFont()) {
+			currStyle.fontName = ptr->AsLayoutTextEventChangeFont().fontName;
+			rc->PushStyle(currStyle);
+		}
+		else if (ptr->IsLayoutTextEventChangeScale()) {
+			currStyle.scale = ptr->AsLayoutTextEventChangeScale().scale;
+			rc->PushStyle(currStyle);
+		}
+		else if (ptr->IsLayoutTextEventChangeColor()) {
+			currStyle.color = ptr->AsLayoutTextEventChangeColor().color;
+			rc->PushStyle(currStyle);
+		}
+		else if (ptr->IsLayoutTextEventChangeJustify()) {
+			currStyle.justification = ptr->AsLayoutTextEventChangeJustify().justification;
+			rc->PushStyle(currStyle);
+			currX = x;
+			// TODO: Force a new line here?
+		}
+		else if (ptr->IsLayoutTextEventLineBreak()) {
+			currX = x;
+			// TODO: Advance new line
+		}
+		else if (ptr->IsLayoutTextEventPopStyle()) {
+			rc->PopStyle();
+			ASSERT(rc->styleStack.count > 0);
+		}
+		else if (ptr->IsLayoutTextEventDrawText()) {
+			addEvent = false;
+			LayoutTextForEvent(ptr->AsLayoutTextEventDrawText().text, newEvents, &currX, x, w, currStyle, rc);
+		}
+		else {
+			ASSERT(false);
+		}
+
+		if (addEvent) {
+			newEvents->PushBack(*ptr);
+		}
+	}
+}
+
 int MixColor(int tint, unsigned char scale) {
 	int a = (tint & 0xFF000000) >> 24;
 	int r = (tint & 0xFF0000) >> 16;
@@ -154,10 +266,12 @@ void RenderTextToBitmap(const SubString& text, float* currX, float* currY,
 						LayoutTextStyle currStyle, LayoutRenderingContext* rc, BitmapData pageBmp) {
 	
 	stbtt_fontinfo font = rc->GetFont(StringStackBuffer<256>("%.*s", BNS_LEN_START(currStyle.fontName)).buffer);
+
+	float pixelScale = currStyle.scale;
+	float scale = stbtt_ScaleForPixelHeight(&font, pixelScale);
+
 	for (int i = 0; i < text.length; i++) {
 		char c = text.start[i];
-		float pixelScale = currStyle.scale;
-		float scale = stbtt_ScaleForPixelHeight(&font, pixelScale);
 
 		int cW = 0, cH = 0;
 		unsigned char* cBmp = stbtt_GetCodepointBitmap(&font, 0, scale, c, &cW, &cH, 0, 0);
@@ -195,7 +309,6 @@ void RenderTextToBitmap(const SubString& text, float* currX, float* currY,
 
 		if (*currX > startY + w) {
 			*currX = startX;
-			*currY += pixelScale;
 		}
 
 		if (charBmp.data != nullptr) {
@@ -207,7 +320,11 @@ void RenderTextToBitmap(const SubString& text, float* currX, float* currY,
 void RenderTextEventsToBitmap(const Vector<LayoutTextEvent>& events, float x, float y, float w, float h, LayoutRenderingContext* rc, BitmapData pageBmp) {
 	float currX = x;
 	float currY = y;
-	BNS_VEC_FOREACH(events) {
+
+	Vector<LayoutTextEvent> newEvents;
+	LayoutTextEvents(events, &newEvents, x, w, rc, nullptr);
+
+	BNS_VEC_FOREACH(newEvents) {
 		LayoutTextStyle currStyle = rc->GetCurrentStyle();
 		if (ptr->IsLayoutTextEventChangeFont()) {
 			currStyle.fontName = ptr->AsLayoutTextEventChangeFont().fontName;
@@ -226,6 +343,11 @@ void RenderTextEventsToBitmap(const Vector<LayoutTextEvent>& events, float x, fl
 			rc->PushStyle(currStyle);
 			currX = x;
 			// TODO: Force a new line here?
+		}
+		else if (ptr->IsLayoutTextEventLineBreak()) {
+			currX = x;
+			// TODO: Advance new line
+			currY += currStyle.scale;
 		}
 		else if (ptr->IsLayoutTextEventPopStyle()) {
 			rc->PopStyle();

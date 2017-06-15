@@ -20,9 +20,9 @@
 (align-x (ref page) (item h2) (align centre))
 (align-x (ref page) (item r1) (align centre))
 
-(rect (name rec) (y (/ (height page) 2)) (width (/ (width page) 3)) (height 50))
+(rect (name rec) (y (/ (height page) 2)) (width (/ (width page) 8)) (height 50))
 
-(text (name rec-tex) (contents "LDUF") (x (x rec)) (y (y rec)) (width (width rec)) (height (height rec)))
+(text (name rec-tex) (contents "LDUF the only way out is forward I think therefore I am you know?") (x (x rec)) (y (y rec)) (width (width rec)) (height (height rec)))
 
 (align-x (ref page) (item rec))
 
