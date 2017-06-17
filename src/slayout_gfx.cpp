@@ -112,6 +112,38 @@ void BlitBitmap(BitmapData bitmap, int x, int y, int w, int h, BitmapData img) {
 }
 
 void DrawLine(BitmapData bitmap, int x0, int y0, int x1, int y1, int thickness, int col) {
-	bitmap.data[y0 * bitmap.width + x0] = col;
-	bitmap.data[y1 * bitmap.width + x1] = col;
+	float deltaX = x1 - x0;
+	float deltaY = y1 - y0;
+	if (deltaX == 0) {
+		int minY = BNS_MIN(y0, y1);
+		int maxY = BNS_MAX(y0, y1);
+		for (int i = minY; i <= maxY; i++) {
+			bitmap.data[i * bitmap.width + x0] = col;
+		}
+		return;
+	}
+	float deltaErr = BNS_ABS(deltaY / deltaX);
+	float error = deltaErr - 0.5f;
+
+	// Swap the points so that x0 is always lower
+	if (x0 > x1) {
+		int temp = x0;
+		x0 = x1;
+		x1 = temp;
+		temp = y0;
+		y0 = y1;
+		y1 = temp;
+	}
+
+	int y = y0;
+	int ySign = (y0 < y1) ? 1 : -1;
+	for (int x = x0; x <= x1; x++) {
+		bitmap.data[y * bitmap.width + x] = col;
+		error += deltaErr;
+		while (error >= 0.5f) {
+			y += ySign;
+			error -= 1.0f;
+			bitmap.data[y * bitmap.width + x] = col;
+		}
+	}
 }

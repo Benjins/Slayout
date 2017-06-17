@@ -1102,6 +1102,11 @@ int main(){
 					printf("\tw: %f:\n", ptr->AsLayoutPage().width.AsLayoutValueSimple().val);
 					printf("\th: %f:\n", ptr->AsLayoutPage().height.AsLayoutValueSimple().val);
 				}
+				else if (ptr->IsLayoutPoint()) {
+					printf("Point %.*s:\n", BNS_LEN_START(ptr->name));
+					printf("\tx: %f:\n", ptr->AsLayoutPoint().x.AsLayoutValueSimple().val);
+					printf("\ty: %f:\n", ptr->AsLayoutPoint().y.AsLayoutValueSimple().val);
+				}
 			}
 
 			const char* fileName = "output/slayout.bmp";
