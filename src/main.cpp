@@ -217,6 +217,17 @@ bool ExtractSubSexprByName(BNSexpr* sexpr, const char* name, BNSexpr* outVal) {
 	return false;
 }
 
+bool ExtractSubSexprsByName(BNSexpr* sexpr, const char* name, BNSexpr* outVal) {
+	ASSERT(sexpr->IsBNSexprParenList());
+	BNS_VEC_FOREACH(sexpr->AsBNSexprParenList().children) {
+		if (MatchSexpr(ptr, StringStackBuffer<256>("(%s @{} @{...})", name).buffer, { outVal })) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 void LayoutContextSkeletonPass(const Vector<BNSexpr>& sexprs, LayoutContext* ctx) {
 	BNS_VEC_FOREACH(sexprs) {
 		BNSexpr args;
@@ -271,8 +282,8 @@ void LayoutContextSkeletonPass(const Vector<BNSexpr>& sexprs, LayoutContext* ctx
 		else if (MatchSexpr(ptr, "(line @{} @{...})", { &args })) {
 			if (ExtractorNameFromSexprs(&args, &node.name)) {
 				BNSexpr fromSexpr, toSexpr;
-				bool isGood = ExtractSubSexprByName(&args, "from", &fromSexpr);
-				isGood &= ExtractSubSexprByName(&args, "to", &toSexpr);
+				bool isGood = ExtractSubSexprsByName(&args, "from", &fromSexpr);
+				isGood &= ExtractSubSexprsByName(&args, "to", &toSexpr);
 				ASSERT(isGood);
 
 				LayoutPoint from;
@@ -425,6 +436,7 @@ enum LayoutSolverResult {
 	LSR_Success,
 	LSR_SomeProgress,
 	LSR_NoProgress,
+	LSR_AlreadyDone,
 	LSR_Error
 };
 
@@ -520,11 +532,13 @@ bool SolveFormula(LayoutValueFormula* formula, LayoutContext* ctx, float* outVal
 
 LayoutSolverResult StepLayoutNode(LayoutNode* node, LayoutContext* ctx) {
 	bool progress = false;
-	bool doMore = false; 
+	bool doMore = false;
+	bool alreadyDone = true;
 	if (node->IsLayoutRect()) {
 		for (int i = 0; i < 4; i++) {
 			LayoutValue* val = &node->AsLayoutRect()[i];
 			if (val->IsLayoutValueFormula()) {
+				alreadyDone = false;
 				float solvedVal;
 				if (SolveFormula(&val->AsLayoutValueFormula(), ctx, &solvedVal)) {
 					*val = LayoutValueSimple(solvedVal);
@@ -539,6 +553,7 @@ LayoutSolverResult StepLayoutNode(LayoutNode* node, LayoutContext* ctx) {
 			}
 			else {
 				doMore = true;
+				alreadyDone = false;
 			}
 		}
 	}
@@ -546,6 +561,7 @@ LayoutSolverResult StepLayoutNode(LayoutNode* node, LayoutContext* ctx) {
 		for (int i = 0; i < 2; i++) {
 			LayoutValue* val = &node->AsLayoutPoint()[i];
 			if (val->IsLayoutValueFormula()) {
+				alreadyDone = false;
 				float solvedVal;
 				if (SolveFormula(&val->AsLayoutValueFormula(), ctx, &solvedVal)) {
 					*val = LayoutValueSimple(solvedVal);
@@ -560,6 +576,7 @@ LayoutSolverResult StepLayoutNode(LayoutNode* node, LayoutContext* ctx) {
 			}
 			else {
 				doMore = true;
+				alreadyDone = false;
 			}
 		}
 	}
@@ -567,7 +584,10 @@ LayoutSolverResult StepLayoutNode(LayoutNode* node, LayoutContext* ctx) {
 		ASSERT(false);
 	}
 
-	if (doMore) {
+	if (alreadyDone) {
+		return LSR_AlreadyDone;
+	}
+	else if (doMore) {
 		return progress ? LSR_SomeProgress : LSR_NoProgress;
 	}
 	else {
@@ -650,6 +670,37 @@ LayoutValue* GetLayoutValueWidth(LayoutNode* node) {
 	}
 }
 
+// TODO: There's got to be a better way... :p
+LayoutSolverResult CombineSubResults(LayoutSolverResult res1, LayoutSolverResult res2) {
+	if (res1 == LSR_Success && res2 == LSR_Success) {
+		return LSR_Success;
+	}
+	else if (res1 == LSR_AlreadyDone && res2 == LSR_AlreadyDone) {
+		return LSR_AlreadyDone;
+	}
+	else if (res1 == LSR_AlreadyDone && res2 == LSR_Success) {
+		return LSR_Success;
+	}
+	else if (res1 == LSR_Success && res2 == LSR_AlreadyDone) {
+		return LSR_Success;
+	}
+	else if (res1 == LSR_NoProgress && res2 == LSR_NoProgress) {
+		return LSR_NoProgress;
+	}
+	else if (res1 == LSR_AlreadyDone && res2 == LSR_NoProgress) {
+		return LSR_NoProgress;
+	}
+	else if (res1 == LSR_NoProgress && res2 == LSR_AlreadyDone) {
+		return LSR_NoProgress;
+	}
+	else if (res1 == LSR_Error || res2 == LSR_Error) {
+		return LSR_Error;
+	}
+	else {
+		return LSR_SomeProgress;
+	}
+}
+
 LayoutSolverResult StepLayoutVerb(LayoutContext* ctx, LayoutVerb* verb) {
 	if (verb->IsLayoutTextNode()) {
 		LayoutNode* node = &ctx->nodes.data[verb->AsLayoutTextNode().node];
@@ -666,11 +717,21 @@ LayoutSolverResult StepLayoutVerb(LayoutContext* ctx, LayoutVerb* verb) {
 		ASSERT(node->IsLayoutRect());
 		return StepLayoutNode(node, ctx);
 	}
+	else if (verb->IsLayoutLine()) {
+		LayoutNode* from = &ctx->nodes.data[verb->AsLayoutLine().from];
+		LayoutNode* to   = &ctx->nodes.data[verb->AsLayoutLine().to];
+		ASSERT(from->IsLayoutPoint());
+		ASSERT(to->IsLayoutPoint());
+
+		LayoutSolverResult subRes1 = StepLayoutNode(from, ctx);
+		LayoutSolverResult subRes2 = StepLayoutNode(to, ctx);
+		return CombineSubResults(subRes1, subRes2);
+	}
 	else if (verb->IsLayoutRow()) {
 		LayoutNode* result = &ctx->nodes.data[verb->AsLayoutRow().result];
 		ASSERT(result->IsLayoutRect());
 		LayoutSolverResult subRes = StepLayoutNode(result, ctx);
-		if (subRes == LSR_Success) {
+		if (subRes == LSR_Success || subRes == LSR_AlreadyDone) {
 			StepLayoutRow(&verb->AsLayoutRow(), ctx);
 		}
 
@@ -749,10 +810,15 @@ LayoutSolverResult StepLayoutContextSolver(LayoutContext* ctx) {
 			progress = true;
 			needMore = true;
 		}
+		else if (subRes == LSR_AlreadyDone) {
+			progress = false;
+			needMore = false;
+		}
 		else if (subRes == LSR_NoProgress) {
 			needMore = true;
 		}
 		else {
+			ASSERT(false);
 			return LSR_Error;
 		}
 	}
@@ -981,6 +1047,16 @@ void RenderLayoutToBMP(LayoutContext* ctx, const char* fileName) {
 			else {
 				BlitBitmap(data, x, data.height - y, width, height, imgData);
 			}
+		}
+		else if (ptr->IsLayoutLine()) {
+			LayoutNode* from = &ctx->nodes.data[ptr->AsLayoutLine().from];
+			LayoutNode* to   = &ctx->nodes.data[ptr->AsLayoutLine().to];
+			int x0 = from->AsLayoutPoint().x.AsLayoutValueSimple().val;
+			int y0 = from->AsLayoutPoint().y.AsLayoutValueSimple().val;
+			int x1 = to->AsLayoutPoint().x.AsLayoutValueSimple().val;
+			int y1 = to->AsLayoutPoint().y.AsLayoutValueSimple().val;
+
+			DrawLine(data, x0, data.height - y0, x1, data.height - y1, 3, 0xFF5577CC);
 		}
 	}
 

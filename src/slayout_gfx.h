@@ -43,4 +43,6 @@ BitmapData LoadBMPFromFile(const char* fileName);
 
 void WriteBMPToFile(BitmapData data, const char* fileName);
 
+void DrawLine(BitmapData bitmap, int x0, int y0, int x1, int y1, int thickness, int col);
+
 #endif

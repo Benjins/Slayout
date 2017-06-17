@@ -110,3 +110,8 @@ void BlitBitmap(BitmapData bitmap, int x, int y, int w, int h, BitmapData img) {
 		}
 	}
 }
+
+void DrawLine(BitmapData bitmap, int x0, int y0, int x1, int y1, int thickness, int col) {
+	bitmap.data[y0 * bitmap.width + x0] = col;
+	bitmap.data[y1 * bitmap.width + x1] = col;
+}
