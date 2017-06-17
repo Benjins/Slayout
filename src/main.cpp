@@ -77,34 +77,41 @@ struct LayoutNode : LayoutNodeData {
 	SubString name;
 };
 
+typedef int LayoutNodeIndex;
+
 struct LayoutTextNode {
-	LayoutNode* node;
+	LayoutNodeIndex node;
 	BNSexpr text;
 };
 
 struct LayoutImageNode {
-	LayoutNode* node;
+	LayoutNodeIndex node;
 	SubString imgName;
 };
 
 struct LayoutRectNode {
-	LayoutNode* node;
+	LayoutNodeIndex node;
 };
 
 struct LayoutAlignX{
-	LayoutNode* ref;
-	LayoutNode* item;
+	LayoutNodeIndex ref;
+	LayoutNodeIndex item;
 };
 
 struct LayoutBeneath {
-	LayoutNode* above;
-	LayoutNode* below;
+	LayoutNodeIndex above;
+	LayoutNodeIndex below;
 	LayoutValue spacing;
 };
 
 struct LayoutRow {
-	LayoutNode* result;
-	Vector<LayoutNode*> elements;
+	LayoutNodeIndex result;
+	Vector<LayoutNodeIndex> elements;
+};
+
+struct LayoutLine {
+	LayoutNodeIndex from;
+	LayoutNodeIndex to;
 };
 
 #define DISC_MAC(mac)    \
@@ -113,7 +120,8 @@ struct LayoutRow {
 	mac(LayoutImageNode) \
 	mac(LayoutAlignX)    \
 	mac(LayoutBeneath)   \
-	mac(LayoutRow)
+	mac(LayoutRow)       \
+	mac(LayoutLine)
 
 DEFINE_DISCRIMINATED_UNION(LayoutVerb, DISC_MAC)
 
@@ -172,12 +180,36 @@ void ExtractXYWH(BNSexpr* sexpr, LayoutRect* rect) {
 	}
 }
 
+void ExtractXY(BNSexpr* sexpr, LayoutPoint* pt) {
+	ASSERT(sexpr->IsBNSexprParenList());
+	BNS_VEC_FOREACH(sexpr->AsBNSexprParenList().children) {
+		BNSexpr val;
+		if (MatchSexpr(ptr, "(x @{})", { &val })) {
+			ExtractLayoutValueFromSexpr(&val, &pt->x);
+		}
+		else if (MatchSexpr(ptr, "(y @{})", { &val })) {
+			ExtractLayoutValueFromSexpr(&val, &pt->y);
+		}
+	}
+}
+
 bool ExtractorNameFromSexprs(BNSexpr* sexprs, SubString* outName) {
 	ASSERT(sexprs->IsBNSexprParenList());
 	BNS_VEC_FOREACH(sexprs->AsBNSexprParenList().children) {
 		BNSexpr val;
 		if (MatchSexpr(ptr, "(name @{id})", { &val })) {
 			*outName = val.AsBNSexprIdentifier().identifier;
+			return true;
+		}
+	}
+
+	return false;
+}
+
+bool ExtractSubSexprByName(BNSexpr* sexpr, const char* name, BNSexpr* outVal) {
+	ASSERT(sexpr->IsBNSexprParenList());
+	BNS_VEC_FOREACH(sexpr->AsBNSexprParenList().children) {
+		if (MatchSexpr(ptr, StringStackBuffer<256>("(%s @{})", name).buffer, { outVal })) {
 			return true;
 		}
 	}
@@ -195,6 +227,11 @@ void LayoutContextSkeletonPass(const Vector<BNSexpr>& sexprs, LayoutContext* ctx
 				ExtractXYWH(&args, &rect);
 				node.Assign(rect);
 				ctx->nodes.PushBack(node);
+
+				LayoutTextNode txt;
+				txt.node = ctx->nodes.count - 1;
+				txt.text = *ptr;
+				ctx->verbs.PushBack(txt);
 			}
 			else {
 				printf("text node requires a name!");
@@ -207,6 +244,51 @@ void LayoutContextSkeletonPass(const Vector<BNSexpr>& sexprs, LayoutContext* ctx
 				ExtractXYWH(&args, &rect);
 				node.Assign(rect);
 				ctx->nodes.PushBack(node);
+
+				LayoutImageNode img;
+				img.node = ctx->nodes.count - 1;
+				BNSexpr imgSrc;
+				if (ExtractSubSexprByName(&args, "src", &imgSrc)) {
+					if (imgSrc.IsBNSexprString()) {
+						img.imgName = imgSrc.AsBNSexprString().value;
+						ctx->verbs.PushBack(img);
+					}
+					else {
+						printf("src attribute on image node needs to be a string.\n");
+						ASSERT(false);
+					}
+				}
+				else {
+					printf("An image node needs to have its src specified.\n");
+					ASSERT(false);
+				}
+			}
+			else {
+				printf("image node requires a name!");
+				ASSERT(false);
+			}
+		}
+		else if (MatchSexpr(ptr, "(line @{} @{...})", { &args })) {
+			if (ExtractorNameFromSexprs(&args, &node.name)) {
+				BNSexpr fromSexpr, toSexpr;
+				bool isGood = ExtractSubSexprByName(&args, "from", &fromSexpr);
+				isGood &= ExtractSubSexprByName(&args, "to", &toSexpr);
+				ASSERT(isGood);
+
+				LayoutPoint from;
+				ExtractXY(&fromSexpr, &from);
+				node.Assign(from);
+				ctx->nodes.PushBack(node);
+
+				LayoutPoint to;
+				ExtractXY(&toSexpr, &to);
+				node.Assign(to);
+				ctx->nodes.PushBack(node);
+
+				LayoutLine line;
+				line.from = ctx->nodes.count - 2;
+				line.to   = ctx->nodes.count - 1;
+				ctx->verbs.PushBack(line);
 			}
 			else {
 				printf("image node requires a name!");
@@ -219,6 +301,10 @@ void LayoutContextSkeletonPass(const Vector<BNSexpr>& sexprs, LayoutContext* ctx
 				ExtractXYWH(&args, &rect);
 				node.Assign(rect);
 				ctx->nodes.PushBack(node);
+
+				LayoutRectNode rectVerb;
+				rectVerb.node = ctx->nodes.count - 1;
+				ctx->verbs.PushBack(rectVerb);
 			}
 			else {
 				printf("rect node requires a name!");
@@ -240,6 +326,16 @@ void LayoutContextSkeletonPass(const Vector<BNSexpr>& sexprs, LayoutContext* ctx
 	}
 }
 
+LayoutNodeIndex GetLayoutNodeIndexByName(LayoutContext* ctx, const SubString& name) {
+	BNS_VEC_FOREACH(ctx->nodes) {
+		if (ptr->name == name) {
+			return ptr - ctx->nodes.data;
+		}
+	}
+
+	return -1;
+}
+
 LayoutNode* GetLayoutNodeByName(LayoutContext* ctx, const SubString& name) {
 	BNS_VEC_FOREACH(ctx->nodes) {
 		if (ptr->name == name) {
@@ -250,69 +346,15 @@ LayoutNode* GetLayoutNodeByName(LayoutContext* ctx, const SubString& name) {
 	return nullptr;
 }
 
-bool ExtractSubSexprByName(BNSexpr* sexpr, const char* name, BNSexpr* outVal) {
-	ASSERT(sexpr->IsBNSexprParenList());
-	BNS_VEC_FOREACH(sexpr->AsBNSexprParenList().children) {
-		if (MatchSexpr(ptr, StringStackBuffer<256>("(%s @{})", name).buffer, { outVal })) {
-			return true;
-		}
-	}
-
-	return false;
-}
-
 void LayoutContextVerbsPass(const Vector<BNSexpr>& sexprs, LayoutContext* ctx) {
 	BNS_VEC_FOREACH(sexprs) {
 		BNSexpr args;
 		LayoutNode node;
-		if (MatchSexpr(ptr, "(text @{} @{...})", { &args })) {
+		if (MatchSexpr(ptr, "(row @{} @{...})", { &args })) {
 			SubString name;
 			ExtractorNameFromSexprs(&args, &name);
-			LayoutNode* node = GetLayoutNodeByName(ctx, name);
-			ASSERT(node != nullptr);
-			LayoutTextNode txt;
-			txt.node = node;
-			txt.text = *ptr;
-			ctx->verbs.PushBack(txt);
-		}
-		else if (MatchSexpr(ptr, "(image @{} @{...})", { &args })) {
-			SubString name;
-			ExtractorNameFromSexprs(&args, &name);
-			LayoutNode* node = GetLayoutNodeByName(ctx, name);
-			ASSERT(node != nullptr);
-			LayoutImageNode img;
-			img.node = node;
-			BNSexpr imgSrc;
-			if (ExtractSubSexprByName(&args, "src", &imgSrc)) {
-				if (imgSrc.IsBNSexprString()){
-					img.imgName = imgSrc.AsBNSexprString().value;
-					ctx->verbs.PushBack(img);
-				}
-				else {
-					printf("src attribute on image node needs to be a string.\n");
-					ASSERT(false);
-				}
-			}
-			else {
-					printf("An image node needs to have its src specified.\n");
-					ASSERT(false);
-			}
-		}
-		else if (MatchSexpr(ptr, "(rect @{} @{...})", { &args })) {
-			SubString name;
-			ExtractorNameFromSexprs(&args, &name);
-			LayoutNode* node = GetLayoutNodeByName(ctx, name);
-			ASSERT(node != nullptr);
-
-			LayoutRectNode rect;
-			rect.node = node;
-			ctx->verbs.PushBack(rect);
-		}
-		else if (MatchSexpr(ptr, "(row @{} @{...})", { &args })) {
-			SubString name;
-			ExtractorNameFromSexprs(&args, &name);
-			LayoutNode* node = GetLayoutNodeByName(ctx, name);
-			ASSERT(node != nullptr);
+			LayoutNodeIndex node = GetLayoutNodeIndexByName(ctx, name);
+			ASSERT(node != -1);
 			LayoutRow row;
 			row.result = node;
 
@@ -320,8 +362,8 @@ void LayoutContextVerbsPass(const Vector<BNSexpr>& sexprs, LayoutContext* ctx) {
 				BNSexpr elems;
 				if (MatchSexpr(ptr, "(elements @{id} @{...})", { &elems })) {
 					BNS_VEC_FOREACH_NAME(elems.AsBNSexprParenList().children, elemPtr) {
-						LayoutNode* elem = GetLayoutNodeByName(ctx, elemPtr->AsBNSexprIdentifier().identifier);
-						ASSERT(elem != nullptr);
+						LayoutNodeIndex elem = GetLayoutNodeIndexByName(ctx, elemPtr->AsBNSexprIdentifier().identifier);
+						ASSERT(elem != -1);
 						row.elements.PushBack(elem);
 					}
 				}
@@ -334,8 +376,8 @@ void LayoutContextVerbsPass(const Vector<BNSexpr>& sexprs, LayoutContext* ctx) {
 			if (ExtractSubSexprByName(&args, "ref", &ref) && ExtractSubSexprByName(&args, "item", &item)) {
 				if (ref.IsBNSexprIdentifier() && item.IsBNSexprIdentifier()) {
 					LayoutAlignX alignX;
-					alignX.ref  = GetLayoutNodeByName(ctx,  ref.AsBNSexprIdentifier().identifier);
-					alignX.item = GetLayoutNodeByName(ctx, item.AsBNSexprIdentifier().identifier);
+					alignX.ref  = GetLayoutNodeIndexByName(ctx,  ref.AsBNSexprIdentifier().identifier);
+					alignX.item = GetLayoutNodeIndexByName(ctx, item.AsBNSexprIdentifier().identifier);
 					ctx->verbs.PushBack(alignX);
 				}
 				else {
@@ -353,8 +395,8 @@ void LayoutContextVerbsPass(const Vector<BNSexpr>& sexprs, LayoutContext* ctx) {
 			if (ExtractSubSexprByName(&args, "top", &top) && ExtractSubSexprByName(&args, "bottom", &bottom)) {
 				if (top.IsBNSexprIdentifier() && bottom.IsBNSexprIdentifier()) {
 					LayoutBeneath beneath;
-					beneath.above = GetLayoutNodeByName(ctx, top.AsBNSexprIdentifier().identifier);
-					beneath.below = GetLayoutNodeByName(ctx, bottom.AsBNSexprIdentifier().identifier);
+					beneath.above = GetLayoutNodeIndexByName(ctx, top.AsBNSexprIdentifier().identifier);
+					beneath.below = GetLayoutNodeIndexByName(ctx, bottom.AsBNSexprIdentifier().identifier);
 
 					BNSexpr spacing;
 					if (ExtractSubSexprByName(&args, "spacing", &spacing)) {
@@ -560,19 +602,19 @@ bool LayoutNodeIsSolved(LayoutNode* node) {
 
 void StepLayoutRow(LayoutRow* row, LayoutContext* ctx) {
 	int count = row->elements.count;
-	float totalWidth = row->result->AsLayoutRect().width.AsLayoutValueSimple().val;
-	float height = row->result->AsLayoutRect().height.AsLayoutValueSimple().val;
+	float totalWidth = ctx->nodes.data[row->result].AsLayoutRect().width.AsLayoutValueSimple().val;
+	float height = ctx->nodes.data[row->result].AsLayoutRect().height.AsLayoutValueSimple().val;
 	float elemWidth = totalWidth / count;
-	float y = row->result->AsLayoutRect().y.AsLayoutValueSimple().val;
-	float currX = row->result->AsLayoutRect().x.AsLayoutValueSimple().val;
+	float y = ctx->nodes.data[row->result].AsLayoutRect().y.AsLayoutValueSimple().val;
+	float currX = ctx->nodes.data[row->result].AsLayoutRect().x.AsLayoutValueSimple().val;
 
 	BNS_VEC_FOREACH(row->elements) {
-		(*ptr)->AsLayoutRect().width = LayoutValueSimple(elemWidth);
-		(*ptr)->AsLayoutRect().y = LayoutValueSimple(y);
-		(*ptr)->AsLayoutRect().x = LayoutValueSimple(currX);
+		ctx->nodes.data[(*ptr)].AsLayoutRect().width = LayoutValueSimple(elemWidth);
+		ctx->nodes.data[(*ptr)].AsLayoutRect().y = LayoutValueSimple(y);
+		ctx->nodes.data[(*ptr)].AsLayoutRect().x = LayoutValueSimple(currX);
 
-		if ((*ptr)->AsLayoutRect().height.type == LayoutValue::UE_None) {
-			(*ptr)->AsLayoutRect().height = LayoutValueSimple(height);
+		if (ctx->nodes.data[(*ptr)].AsLayoutRect().height.type == LayoutValue::UE_None) {
+			ctx->nodes.data[(*ptr)].AsLayoutRect().height = LayoutValueSimple(height);
 		}
 
 		currX += elemWidth;
@@ -610,22 +652,22 @@ LayoutValue* GetLayoutValueWidth(LayoutNode* node) {
 
 LayoutSolverResult StepLayoutVerb(LayoutContext* ctx, LayoutVerb* verb) {
 	if (verb->IsLayoutTextNode()) {
-		LayoutNode* node = verb->AsLayoutTextNode().node;
+		LayoutNode* node = &ctx->nodes.data[verb->AsLayoutTextNode().node];
 		ASSERT(node->IsLayoutRect());
 		return StepLayoutNode(node, ctx);
 	}
 	else if (verb->IsLayoutImageNode()) {
-		LayoutNode* node = verb->AsLayoutImageNode().node;
+		LayoutNode* node = &ctx->nodes.data[verb->AsLayoutImageNode().node];
 		ASSERT(node->IsLayoutRect());
 		return StepLayoutNode(node, ctx);
 	}
 	else if (verb->IsLayoutRectNode()) {
-		LayoutNode* node = verb->AsLayoutRectNode().node;
+		LayoutNode* node = &ctx->nodes.data[verb->AsLayoutRectNode().node];
 		ASSERT(node->IsLayoutRect());
 		return StepLayoutNode(node, ctx);
 	}
 	else if (verb->IsLayoutRow()) {
-		LayoutNode* result = verb->AsLayoutRow().result;
+		LayoutNode* result = &ctx->nodes.data[verb->AsLayoutRow().result];
 		ASSERT(result->IsLayoutRect());
 		LayoutSolverResult subRes = StepLayoutNode(result, ctx);
 		if (subRes == LSR_Success) {
@@ -635,8 +677,8 @@ LayoutSolverResult StepLayoutVerb(LayoutContext* ctx, LayoutVerb* verb) {
 		return subRes;
 	}
 	else if (verb->IsLayoutAlignX()) {
-		LayoutNode* ref  = verb->AsLayoutAlignX().ref;
-		LayoutNode* item = verb->AsLayoutAlignX().item;
+		LayoutNode* ref  = &ctx->nodes.data[verb->AsLayoutAlignX().ref];
+		LayoutNode* item = &ctx->nodes.data[verb->AsLayoutAlignX().item];
 
 		ASSERT(item->IsLayoutRect());
 		LayoutValue* xValue = GetLayoutValueX(ref);
@@ -657,8 +699,8 @@ LayoutSolverResult StepLayoutVerb(LayoutContext* ctx, LayoutVerb* verb) {
 		}
 	}
 	else if (verb->IsLayoutBeneath()) {
-		LayoutNode* above = verb->AsLayoutBeneath().above;
-		LayoutNode* below = verb->AsLayoutBeneath().below;
+		LayoutNode* above = &ctx->nodes.data[verb->AsLayoutBeneath().above];
+		LayoutNode* below = &ctx->nodes.data[verb->AsLayoutBeneath().below];
 
 		ASSERT(above->IsLayoutRect());
 		ASSERT(below->IsLayoutRect());
@@ -685,7 +727,7 @@ LayoutSolverResult StepLayoutVerb(LayoutContext* ctx, LayoutVerb* verb) {
 }
 
 inline bool IsVerbNeededForRendering(LayoutVerb* verb) {
-	return verb->IsLayoutTextNode() || verb->IsLayoutImageNode();
+	return verb->IsLayoutTextNode() || verb->IsLayoutImageNode() || verb->IsLayoutLine();
 }
 
 LayoutSolverResult StepLayoutContextSolver(LayoutContext* ctx) {
@@ -893,7 +935,7 @@ void RenderLayoutToBMP(LayoutContext* ctx, const char* fileName) {
 
 	BNS_VEC_FOREACH(ctx->verbs) {
 		if (ptr->IsLayoutTextNode()) {
-			LayoutNode* node = ptr->AsLayoutTextNode().node;
+			LayoutNode* node = &ctx->nodes.data[ptr->AsLayoutTextNode().node];
 
 			float x = node->AsLayoutRect().x.AsLayoutValueSimple().val;
 			float y = node->AsLayoutRect().y.AsLayoutValueSimple().val;
@@ -920,7 +962,7 @@ void RenderLayoutToBMP(LayoutContext* ctx, const char* fileName) {
 			}
 		}
 		else if (ptr->IsLayoutImageNode()) {
-			LayoutNode* node = ptr->AsLayoutImageNode().node;
+			LayoutNode* node = &ctx->nodes.data[ptr->AsLayoutImageNode().node];
 			int x = node->AsLayoutRect().x.AsLayoutValueSimple().val;
 			int y = node->AsLayoutRect().y.AsLayoutValueSimple().val;
 			int width = node->AsLayoutRect().width.AsLayoutValueSimple().val;
