@@ -783,11 +783,16 @@ LayoutSolverResult StepLayoutVerb(LayoutContext* ctx, LayoutVerb* verb) {
 		if (above->AsLayoutRect().y.IsLayoutValueSimple()
 		 && above->AsLayoutRect().height.IsLayoutValueSimple()
 		 && spacing->IsLayoutValueSimple()) {
-			float y = above->AsLayoutRect().y.AsLayoutValueSimple().val;
-			float height = above->AsLayoutRect().height.AsLayoutValueSimple().val;
-			float val = y - height;
-			below->AsLayoutRect().y = LayoutValueSimple(y - height - spacing->AsLayoutValueSimple().val);
-			return LSR_Success;
+			if (below->AsLayoutRect().y.IsLayoutValueSimple()) {
+				return LSR_AlreadyDone;
+			}
+			else {
+				float y = above->AsLayoutRect().y.AsLayoutValueSimple().val;
+				float height = above->AsLayoutRect().height.AsLayoutValueSimple().val;
+				float val = y - height - spacing->AsLayoutValueSimple().val;
+				below->AsLayoutRect().y = LayoutValueSimple(val);
+				return LSR_Success;
+			}
 		}
 		else {
 			return LSR_NoProgress;
@@ -861,8 +866,7 @@ LayoutSolverResult StepLayoutContextSolver(LayoutContext* ctx) {
 			needMore = true;
 		}
 		else if (subRes == LSR_AlreadyDone) {
-			progress = false;
-			needMore = false;
+			//Do nothing
 		}
 		else if (subRes == LSR_NoProgress) {
 			needMore = true;

@@ -54,3 +54,19 @@
 (beneath (top h) (bottom r1) (spacing 20))
 
 (beneath (top r1) (bottom h2) (spacing 20))
+
+(text (name bt1) (width 210) (font-size 14) (contents "yo listen up here's the story about me and my life and holy gosh this world is lovely"))
+(text (name bt2) (width 210) (font-size 14) (contents "Huh. sekejethe story about me and my life ands world is lovely"))
+(text (name bt3) (width 210) (font-size 14) (contents "Lol you cant distroy my spirit and it's basically a question of #f or nil"))
+
+(align-x (ref page) (item bt1) (align centre))
+(align-x (ref page) (item bt2) (align centre))
+(align-x (ref page) (item bt3) (align centre))
+
+(text-fill bt1)
+(text-fill bt2)
+(text-fill bt3)
+
+(beneath (top rec-tex) (bottom bt1) (spacing 50))
+(beneath (top bt1)  (bottom bt2) (spacing 10))
+(beneath (top bt2)  (bottom bt3) (spacing 10))
