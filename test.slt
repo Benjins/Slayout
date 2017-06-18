@@ -1,5 +1,5 @@
 (text (name h) (contents (justify right 
-							"QWERTYUIOP"
+							(color #99AA77 "HDS  FDHH") "QWERTYUIOP"
 							(font "fonts/VeraBd.ttf" 8 "ASDFGH, eh sorta ") 
 							(font-size 18 "YO" (color #FF33FF (font-size 36 "O")) (color #555555 "O") "O") " ...sup")) 
                (font-size 16)
@@ -16,13 +16,15 @@
 (image (name b1) (src "img/top_1.bmp"))
 (image (name b2) (src "img/top_2.bmp"))
 (image (name b3) (src "img/top_3.bmp"))
+(image (name b4) (src "img/top_2.bmp"))
+(image (name b5) (src "img/top_1.bmp"))
 
 (align-x (ref page) (item h)  (align centre))
 (align-x (ref page) (item h2) (align centre))
 (align-x (ref page) (item r1) (align centre))
 
 (text (name tbox) (contents "Sup everyone this is some text to test out various features and stuff, yup that's basically everything "
-							"except I don't know like I thought that there was a " (font-size 18 "hell") " but now I'm not sure.")
+							"except I don't know like I thought that there was a " (font-size 36 "hell") " but now I'm not sure. The only way out is forward.")
 				  (font-size 14)
 				  (width (/ (width page) 3)))
 
@@ -38,14 +40,14 @@
 
 (align-x (ref page) (item rec))
 
-(line (name l1) (from (x (+ 5 (x h))) (y 10)) 
+(line (name l1) (from (x (+ 0 (x h))) (y 18)) 
 				(to (x (+ (x rec-tex) 40)) (y (- (y rec-tex) (height rec-tex))))
 				(width 8))
 
 (row (name r1)
      (padding 10)
      (spacing 20)
-     (elements b1 b2 b3) 
+     (elements b1 b2 b3 b4 b5) 
      (height (* 2 (height h)))
      (width (- (width page) (/ (* 3 (x h)) 2))))
      
