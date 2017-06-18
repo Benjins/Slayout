@@ -8,10 +8,9 @@
                (y (- (height page) (margin-top page))))
                 
 (text (name h2) (contents "Another quick brown fox dogs header: '!@#'.") 
-                (font-size 16) 
+                (font-size 18) 
                 (width (/ (width page) 2)) 
-                (height 30) 
-                (y (- (height page) (margin-top page))))
+                (height 30))
 
 (image (name b1) (src "img/top_1.bmp"))
 (image (name b2) (src "img/top_2.bmp"))
@@ -30,11 +29,11 @@
 
 (align-x (ref page) (item tbox))
 
-(beneath (top h2) (bottom tbox) (spacing 200))
+(beneath (top h2) (bottom tbox) (spacing 10))
 
 (text-fill tbox)
 
-(rect (name rec) (y (/ (height page) 2)) (width (+ 0 (/ (width page) 8))) (height 70))
+(rect (name rec) (y (/ (height page) 2)) (width (+ 10 (/ (width page) 8))) (height 70))
 
 (text (name rec-tex) (contents (justify centre "LDUF the only way out is forward I think therefore I am you know?")) (x (x rec)) (y (y rec)) (width (width rec)) (height (height rec)))
 
