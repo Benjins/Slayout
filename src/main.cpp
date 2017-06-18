@@ -114,6 +114,10 @@ struct LayoutLine {
 	LayoutNodeIndex to;
 };
 
+struct LayoutTextFill {
+	LayoutNodeIndex tbox;
+};
+
 #define DISC_MAC(mac)    \
 	mac(LayoutTextNode)  \
 	mac(LayoutRectNode)  \
@@ -121,7 +125,8 @@ struct LayoutLine {
 	mac(LayoutAlignX)    \
 	mac(LayoutBeneath)   \
 	mac(LayoutRow)       \
-	mac(LayoutLine)
+	mac(LayoutLine)      \
+	mac(LayoutTextFill)
 
 DEFINE_DISCRIMINATED_UNION(LayoutVerb, DISC_MAC)
 
@@ -429,6 +434,11 @@ void LayoutContextVerbsPass(const Vector<BNSexpr>& sexprs, LayoutContext* ctx) {
 				ASSERT(false);
 			}
 		}
+		else if (MatchSexpr(ptr, "(text-fill @{id})", { &args })) {
+			LayoutTextFill fill;
+			fill.tbox = GetLayoutNodeIndexByName(ctx, args.AsBNSexprIdentifier().identifier);
+			ctx->verbs.PushBack(fill);
+		}
 	}
 }
 
@@ -701,6 +711,8 @@ LayoutSolverResult CombineSubResults(LayoutSolverResult res1, LayoutSolverResult
 	}
 }
 
+float GetHeightOfTextContentsSexpr(BNSexpr* sexpr, float x, float y, float w);
+
 LayoutSolverResult StepLayoutVerb(LayoutContext* ctx, LayoutVerb* verb) {
 	if (verb->IsLayoutTextNode()) {
 		LayoutNode* node = &ctx->nodes.data[verb->AsLayoutTextNode().node];
@@ -776,6 +788,44 @@ LayoutSolverResult StepLayoutVerb(LayoutContext* ctx, LayoutVerb* verb) {
 			float val = y - height;
 			below->AsLayoutRect().y = LayoutValueSimple(y - height - spacing->AsLayoutValueSimple().val);
 			return LSR_Success;
+		}
+		else {
+			return LSR_NoProgress;
+		}
+	}
+	else if (verb->IsLayoutTextFill()) {
+		LayoutNode* tbox = &ctx->nodes.data[verb->AsLayoutTextFill().tbox];
+		ASSERT(tbox->IsLayoutRect());
+
+		if (tbox->AsLayoutRect().x.IsLayoutValueSimple()
+		 && tbox->AsLayoutRect().y.IsLayoutValueSimple()
+		 && tbox->AsLayoutRect().width.IsLayoutValueSimple()) {
+
+			if (tbox->AsLayoutRect().height.IsLayoutValueSimple()) {
+				return LSR_AlreadyDone;
+			}
+			else {
+
+				float x = tbox->AsLayoutRect().x.AsLayoutValueSimple().val;
+				float y = tbox->AsLayoutRect().y.AsLayoutValueSimple().val;
+				float w = tbox->AsLayoutRect().width.AsLayoutValueSimple().val;
+
+				BNSexpr* textSexpr = nullptr;
+				BNS_VEC_FOREACH_NAME(ctx->verbs, otherPtr) {
+					if (otherPtr->IsLayoutTextNode()
+						&& otherPtr->AsLayoutTextNode().node == verb->AsLayoutTextFill().tbox) {
+						textSexpr = &otherPtr->AsLayoutTextNode().text;
+						break;
+					}
+				}
+
+				ASSERT(textSexpr != nullptr);
+
+				float height = GetHeightOfTextContentsSexpr(textSexpr, x, y, w);
+				tbox->AsLayoutRect().height = LayoutValueSimple(height);
+
+				return LSR_Success;
+			}
 		}
 		else {
 			return LSR_NoProgress;
@@ -986,6 +1036,27 @@ bool ParseTextContentsForTextEvents(BNSexpr* sexpr, Vector<LayoutTextEvent>* eve
 		ASSERT(false);
 		return false;
 	}
+}
+
+float GetHeightOfTextContentsSexpr(BNSexpr* sexpr, float x, float y, float w) {
+	Vector<LayoutTextEvent> events;
+	ParseTextContentsForTextEvents(sexpr, &events);
+
+	// TODO: Better way than this?
+	// Not actually doing any render, but seems a bit sloppy
+	LayoutRenderingContext rc;
+	InitLayoutRenderingContext(&rc);
+
+	float currX = x;
+	float currY = y;
+
+	Vector<LayoutTextEvent> newEvents;
+	Vector<LayoutRenderTextLineInfo> lineInfo;
+	LayoutTextEvents(events, &newEvents, x, w, &rc, &lineInfo);
+	float sum = 0.0f;
+	BNS_VEC_FOLDR(sum, lineInfo, 0.0f, acc + item.height);
+
+	return sum;
 }
 
 void RenderLayoutToBMP(LayoutContext* ctx, const char* fileName) {

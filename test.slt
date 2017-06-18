@@ -7,9 +7,9 @@
                (height 30) 
                (y (- (height page) (margin-top page))))
                 
-(text (name h2) (contents "Another header: '!@#'.") 
+(text (name h2) (contents "Another quick brown fox dogs header: '!@#'.") 
                 (font-size 16) 
-                (width (/ (width page) 3)) 
+                (width (/ (width page) 2)) 
                 (height 30) 
                 (y (- (height page) (margin-top page))))
 
@@ -24,14 +24,15 @@
 (text (name tbox) (contents "Sup everyone this is some text to test out various features and stuff, yup that's basically everything "
 							"except I don't know like I thought that there was a " (font-size 18 "hell") " but now I'm not sure.")
 				  (font-size 14)
-				  (width (/ (width page) 3))
-				  (height 100))
+				  (width (/ (width page) 3)))
 
 (align-x (ref page) (item tbox))
 
-(beneath (top h2) (bottom tbox) (spacing 150))
+(beneath (top h2) (bottom tbox) (spacing 200))
 
-(rect (name rec) (y (/ (height page) 2)) (width (+ 0 (/ (width page) 8))) (height 50))
+(text-fill tbox)
+
+(rect (name rec) (y (/ (height page) 2)) (width (+ 0 (/ (width page) 8))) (height 70))
 
 (text (name rec-tex) (contents (justify centre "LDUF the only way out is forward I think therefore I am you know?")) (x (x rec)) (y (y rec)) (width (width rec)) (height (height rec)))
 

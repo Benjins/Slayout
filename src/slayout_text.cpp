@@ -92,6 +92,7 @@ struct LayoutRenderTextLineInfo {
 	LayoutRenderTextLineInfo() {
 		totalWidth = 0.0f;
 		spaceCount = 0;
+		height = 0.0f;
 	}
 };
 
@@ -164,6 +165,12 @@ void LayoutTextForEvent(SubString text, Vector<LayoutTextEvent>* newEvents, floa
 	float pixelScale = currStyle.scale;
 	float scale = stbtt_ScaleForPixelHeight(&font, pixelScale);
 
+	int ascent, descent, lineGap;
+	stbtt_GetFontVMetrics(&font, &ascent, &descent, &lineGap);
+	float baseline = ascent * scale;
+
+	outLineInfo->Back().height = BNS_MAX(outLineInfo->Back().height, baseline);
+
 	int latestWhitespaceCharIdx = 0;
 	float additionalWidth = 0.0f;
 	for (int i = 0; i < text.length; i++) {
@@ -196,6 +203,7 @@ void LayoutTextForEvent(SubString text, Vector<LayoutTextEvent>* newEvents, floa
 				newEvents->PushBack(LayoutTextEventDrawText(start));
 				newEvents->PushBack(LayoutTextEventLineBreak());
 				outLineInfo->EmplaceBack();
+				outLineInfo->Back().height = BNS_MAX(outLineInfo->Back().height, pixelScale);
 
 				i = 0;
 				text = rest;
@@ -282,7 +290,7 @@ int MixColor(int tint, unsigned char scale) {
 }
 
 void RenderTextToBitmap(const SubString& text, float* currX, float* currY,
-						float startX, float startY, float w, float h,
+						float startX, float startY, float w, float h, float lineHeight,
 						LayoutTextStyle currStyle, LayoutRenderingContext* rc, BitmapData pageBmp) {
 	
 	stbtt_fontinfo font = rc->GetFont(StringStackBuffer<256>("%.*s", BNS_LEN_START(currStyle.fontName)).buffer);
@@ -322,7 +330,7 @@ void RenderTextToBitmap(const SubString& text, float* currX, float* currY,
 		float xAdv = scale * advanceWidth;
 
 		if (charBmp.data != nullptr) {
-			BlitBitmap(pageBmp, (int)*currX + x0, (pageBmp.height - (int)*currY + y0) + h, x1 - x0, y1 - y0, charBmp);
+			BlitBitmap(pageBmp, (int)*currX + x0, (pageBmp.height - (int)*currY + y0 + lineHeight) + h, x1 - x0, y1 - y0, charBmp);
 		}
 
 		*currX += xAdv;
@@ -359,7 +367,7 @@ float StartingXForJustification(float startX, float maxWidth, float textWidth, L
 
 void RenderTextEventsToBitmap(const Vector<LayoutTextEvent>& events, float x, float y, float w, float h, LayoutRenderingContext* rc, BitmapData pageBmp) {
 	float currX = x;
-	float currY = y;
+	float currY = y + h;
 
 	Vector<LayoutTextEvent> newEvents;
 	Vector<LayoutRenderTextLineInfo> lineInfo;
@@ -389,7 +397,7 @@ void RenderTextEventsToBitmap(const Vector<LayoutTextEvent>& events, float x, fl
 		}
 		else if (ptr->IsLayoutTextEventLineBreak()) {
 			// TODO: Advance new line
-			currY += currStyle.scale;
+			currY -= lineInfo.data[lineIndex].height;
 			lineIndex++;
 
 			currX = StartingXForJustification(x, w, lineInfo.Get(lineIndex).totalWidth, currStyle.justification);
@@ -399,7 +407,7 @@ void RenderTextEventsToBitmap(const Vector<LayoutTextEvent>& events, float x, fl
 			ASSERT(rc->styleStack.count > 0);
 		}
 		else if (ptr->IsLayoutTextEventDrawText()) {
-			RenderTextToBitmap(ptr->AsLayoutTextEventDrawText().text, &currX, &currY, x, y, w, h, currStyle, rc, pageBmp);
+			RenderTextToBitmap(ptr->AsLayoutTextEventDrawText().text, &currX, &currY, x, y, w, h, lineInfo.data[lineIndex].height, currStyle, rc, pageBmp);
 		}
 		else {
 			ASSERT(false);
