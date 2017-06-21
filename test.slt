@@ -7,8 +7,8 @@
                (height 30) 
                (y (- (height page) (margin-top page))))
                 
-(text (name h2) (contents "Another quick brown fox dogs header: '!@#'.") 
-                (font-size 18) 
+(text (name h2) (contents "Another quick brown fox jumped dogs header: '!@#'.") 
+                (font-size 12) 
                 (width (/ (width page) 2)) 
                 (height 30))
 
@@ -55,7 +55,7 @@
 (beneath (top r1) (bottom h2) (spacing 20))
 
 (text (name bt1) (width 210) (font-size 14) (contents "yo listen up here's the story about me and my life and holy gosh this world is lovely"))
-(text (name bt2) (width 210) (font-size 14) (contents "Huh. sekejethe story about me and my life ands world is lovely"))
+(text (name bt2) (width 420) (font-size 50) (contents "Huh. sekejethe story about me and my life ands world  is lovely"))
 (text (name bt3) (width 210) (font-size 14) (contents "Lol you cant distroy my spirit and it's basically a question of #f or nil"))
 
 (align-x (ref page) (item bt1) (align centre))
