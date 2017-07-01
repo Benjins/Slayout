@@ -1,0 +1,51 @@
+(text (name my-name)
+      (font-size 48)
+	  (y (- (height page) (* 2(margin-top page))))
+	  (width (/ (width page) 3))
+	  (contents (justify centre (font "fonts/VeraBd.ttf" "Benji") " Smith")))
+	  
+(text-fill my-name)
+
+(align-x (ref page) (item my-name) (align centre))
+
+(text (name addr-1)
+      (font-size 24)
+	  (contents "123 Main Rd."))
+	 
+(text (name addr-2)
+      (font-size 24)
+	  (contents "Unit #13"))
+	  
+(text (name addr-3)
+      (font-size 24)
+	  (contents "Boston, MA, 02118"))
+	  
+(column (name addr-info)
+        (elements addr-1 addr-2 addr-3)
+		(x (margin-left page))
+		(width 210)
+		(height 65))
+		
+(beneath (top my-name) (bottom addr-info) (spacing -10))
+
+(text (name contact-1)
+      (font-size 20)
+	  (contents "github.com/Benjins"))
+	 
+(text (name contact-2)
+      (font-size 20)
+	  (contents "617-867-5309"))
+	  
+(text (name contact-3)
+      (font-size 20)
+	  (contents "smith.benj@husky.neu.edu"))
+	  
+(column (name contact-info)
+        (elements contact-1 contact-2 contact-3)
+		(x (- (- (width page) (margin-right page)) (width contact-info)))
+		(width 240)
+		(height 65))
+		
+(beneath (top my-name) (bottom contact-info) (spacing -10))
+		
+

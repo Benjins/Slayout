@@ -2,7 +2,7 @@
 
 BitmapData solvedData = {};
 
-const char* slayoutFileName = "test.slt";
+const char* slayoutFileName = "resume.slt";
 
 void ResolveLayout(){
 	if (solvedData.data != nullptr){

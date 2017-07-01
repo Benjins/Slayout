@@ -109,6 +109,11 @@ struct LayoutRow {
 	Vector<LayoutNodeIndex> elements;
 };
 
+struct LayoutColumn {
+	LayoutNodeIndex result;
+	Vector<LayoutNodeIndex> elements;
+};
+
 struct LayoutLine {
 	LayoutNodeIndex from;
 	LayoutNodeIndex to;
@@ -125,6 +130,7 @@ struct LayoutTextFill {
 	mac(LayoutAlignX)    \
 	mac(LayoutBeneath)   \
 	mac(LayoutRow)       \
+	mac(LayoutColumn)    \
 	mac(LayoutLine)      \
 	mac(LayoutTextFill)
 
@@ -339,6 +345,18 @@ void LayoutContextSkeletonPass(const Vector<BNSexpr>& sexprs, LayoutContext* ctx
 				ASSERT(false);
 			}
 		}
+		else if (MatchSexpr(ptr, "(column @{} @{...})", { &args })) {
+			if (ExtractorNameFromSexprs(&args, &node.name)) {
+				LayoutRect rect;
+				ExtractXYWH(&args, &rect);
+				node.Assign(rect);
+				ctx->nodes.PushBack(node);
+			}
+			else {
+				printf("row node requires a name!");
+				ASSERT(false);
+			}
+		}
 	}
 }
 
@@ -386,6 +404,27 @@ void LayoutContextVerbsPass(const Vector<BNSexpr>& sexprs, LayoutContext* ctx) {
 			}
 
 			ctx->verbs.PushBack(row);
+		}
+		else if (MatchSexpr(ptr, "(column @{} @{...})", { &args })) {
+			SubString name;
+			ExtractorNameFromSexprs(&args, &name);
+			LayoutNodeIndex node = GetLayoutNodeIndexByName(ctx, name);
+			ASSERT(node != -1);
+			LayoutColumn col;
+			col.result = node;
+
+			BNS_VEC_FOREACH(args.AsBNSexprParenList().children) {
+				BNSexpr elems;
+				if (MatchSexpr(ptr, "(elements @{id} @{...})", { &elems })) {
+					BNS_VEC_FOREACH_NAME(elems.AsBNSexprParenList().children, elemPtr) {
+						LayoutNodeIndex elem = GetLayoutNodeIndexByName(ctx, elemPtr->AsBNSexprIdentifier().identifier);
+						ASSERT(elem != -1);
+						col.elements.PushBack(elem);
+					}
+				}
+			}
+
+			ctx->verbs.PushBack(col);
 		}
 		else if (MatchSexpr(ptr, "(align-x @{} @{...})", { &args })) {
 			BNSexpr ref, item;
@@ -630,7 +669,7 @@ bool LayoutNodeIsSolved(LayoutNode* node) {
 	}
 }
 
-void StepLayoutRow(LayoutRow* row, LayoutContext* ctx) {
+LayoutSolverResult StepLayoutRow(LayoutRow* row, LayoutContext* ctx) {
 	int count = row->elements.count;
 	float totalWidth = ctx->nodes.data[row->result].AsLayoutRect().width.AsLayoutValueSimple().val;
 	float height = ctx->nodes.data[row->result].AsLayoutRect().height.AsLayoutValueSimple().val;
@@ -638,7 +677,15 @@ void StepLayoutRow(LayoutRow* row, LayoutContext* ctx) {
 	float y = ctx->nodes.data[row->result].AsLayoutRect().y.AsLayoutValueSimple().val;
 	float currX = ctx->nodes.data[row->result].AsLayoutRect().x.AsLayoutValueSimple().val;
 
+	bool progress = false;
+
 	BNS_VEC_FOREACH(row->elements) {
+		BNS_FOR_I (4) {
+			if (ctx->nodes.data[(*ptr)].AsLayoutRect()[i].type == LayoutValue::UE_None) {
+				progress = true;
+			}
+		}
+
 		ctx->nodes.data[(*ptr)].AsLayoutRect().width = LayoutValueSimple(elemWidth);
 		ctx->nodes.data[(*ptr)].AsLayoutRect().y = LayoutValueSimple(y);
 		ctx->nodes.data[(*ptr)].AsLayoutRect().x = LayoutValueSimple(currX);
@@ -649,6 +696,39 @@ void StepLayoutRow(LayoutRow* row, LayoutContext* ctx) {
 
 		currX += elemWidth;
 	}
+
+	return progress ? LSR_Success : LSR_AlreadyDone;
+}
+
+LayoutSolverResult StepLayoutColumn(LayoutColumn* col, LayoutContext* ctx) {
+	int count = col->elements.count;
+	float totalHeight = ctx->nodes.data[col->result].AsLayoutRect().height.AsLayoutValueSimple().val;
+	float width = ctx->nodes.data[col->result].AsLayoutRect().width.AsLayoutValueSimple().val;
+	float elemHeight = totalHeight / count;
+	float x = ctx->nodes.data[col->result].AsLayoutRect().x.AsLayoutValueSimple().val;
+	float currY = ctx->nodes.data[col->result].AsLayoutRect().y.AsLayoutValueSimple().val;
+
+	bool progress = false;
+
+	BNS_VEC_FOREACH(col->elements) {
+		BNS_FOR_I(4) {
+			if (ctx->nodes.data[(*ptr)].AsLayoutRect()[i].type == LayoutValue::UE_None) {
+				progress = true;
+			}
+		}
+
+		ctx->nodes.data[(*ptr)].AsLayoutRect().height = LayoutValueSimple(elemHeight);
+		ctx->nodes.data[(*ptr)].AsLayoutRect().x = LayoutValueSimple(x);
+		ctx->nodes.data[(*ptr)].AsLayoutRect().y = LayoutValueSimple(currY);
+
+		if (ctx->nodes.data[(*ptr)].AsLayoutRect().width.type == LayoutValue::UE_None) {
+			ctx->nodes.data[(*ptr)].AsLayoutRect().width = LayoutValueSimple(width);
+		}
+
+		currY -= elemHeight;
+	}
+
+	return progress ? LSR_Success : LSR_AlreadyDone;
 }
 
 LayoutValue* GetLayoutValueX(LayoutNode* node) {
@@ -744,7 +824,23 @@ LayoutSolverResult StepLayoutVerb(LayoutContext* ctx, LayoutVerb* verb) {
 		ASSERT(result->IsLayoutRect());
 		LayoutSolverResult subRes = StepLayoutNode(result, ctx);
 		if (subRes == LSR_Success || subRes == LSR_AlreadyDone) {
-			StepLayoutRow(&verb->AsLayoutRow(), ctx);
+			LayoutSolverResult rowRes = StepLayoutRow(&verb->AsLayoutRow(), ctx);
+			if (subRes == LSR_AlreadyDone) {
+				subRes = rowRes;
+			}
+		}
+
+		return subRes;
+	}
+	else if (verb->IsLayoutColumn()) {
+		LayoutNode* result = &ctx->nodes.data[verb->AsLayoutColumn().result];
+		ASSERT(result->IsLayoutRect());
+		LayoutSolverResult subRes = StepLayoutNode(result, ctx);
+		if (subRes == LSR_Success || subRes == LSR_AlreadyDone) {
+			LayoutSolverResult colRes = StepLayoutColumn(&verb->AsLayoutColumn(), ctx);
+			if (subRes == LSR_AlreadyDone) {
+				subRes = colRes;
+			}
 		}
 
 		return subRes;

@@ -1,8 +1,13 @@
 
 #include "slayout.cpp"
 
-int main(){
+int main(int argc, char** argv){
 	const char* fileName = "test.slt";
+
+	if (argc > 1) {
+		fileName = argv[1];
+	}
+
 	String fileContents = ReadStringFromFile(fileName);
 
 	Vector<BNSexpr> sexprs;
