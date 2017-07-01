@@ -193,27 +193,22 @@ void LayoutTextForEvent(SubString text, Vector<LayoutTextEvent>* newEvents, floa
 		if (*currX + x1 > startX + w) {
 			// Need to break line
 			SubString start = text, rest = text;
-			if (latestWhitespaceCharIdx > 0) {
-				start.length = latestWhitespaceCharIdx;
-				rest.start += (latestWhitespaceCharIdx + 1);
-				rest.length -= (latestWhitespaceCharIdx + 1);
+			start.length = latestWhitespaceCharIdx;
+			rest.start += (latestWhitespaceCharIdx + 1);
+			rest.length -= (latestWhitespaceCharIdx + 1);
 
-				*currX = startX;
+			*currX = startX;
 
-				newEvents->PushBack(LayoutTextEventDrawText(start));
-				newEvents->PushBack(LayoutTextEventLineBreak());
-				outLineInfo->EmplaceBack();
-				outLineInfo->Back().height = BNS_MAX(outLineInfo->Back().height, pixelScale);
+			newEvents->PushBack(LayoutTextEventDrawText(start));
+			newEvents->PushBack(LayoutTextEventLineBreak());
+			outLineInfo->EmplaceBack();
+			outLineInfo->Back().height = BNS_MAX(outLineInfo->Back().height, pixelScale);
 
-				i = 0;
-				text = rest;
-				latestWhitespaceCharIdx = 0;
-				additionalWidth = 0.0f;
-			}
-			else {
-				// Uhhh....
-				ASSERT(false);
-			}
+			i = 0;
+			text = rest;
+			latestWhitespaceCharIdx = 0;
+			additionalWidth = 0.0f;
+			i--;
 		}
 		else {
 			*currX += xAdv;
@@ -341,24 +336,33 @@ void RenderTextToBitmap(const SubString& text, float* currX, float* currY,
 	}
 }
 
-float StartingXForJustification(float startX, float maxWidth, float textWidth, LayoutTextJustification just) {
+struct JustifyLineInfo {
+	float startX;
+	// TODO: calculate these
+	float extraWordSpace;
+	float extraLetterSpace;
+};
+
+JustifyLineInfo StartingXForJustification(float startX, float maxWidth, float textWidth, LayoutTextJustification just) {
+	JustifyLineInfo info = {};
 	if (just == LTJ_Left) {
-		return startX;
+		info.startX = startX;
 	}
 	else if (just == LTJ_Right) {
-		return startX + maxWidth - textWidth;
+		info.startX = startX + maxWidth - textWidth;
 	}
 	else if (just == LTJ_FullJustify) {
 		// TODO: Actually justify it as well
-		return startX;
+		info.startX = startX;
 	}
 	else if (just == LTJ_Centre) {
-		return startX + (maxWidth - textWidth) / 2;
+		info.startX = startX + (maxWidth - textWidth) / 2;
 	}
 	else {
 		ASSERT(false);
-		return 0.0f;
 	}
+
+	return info;
 }
 
 void RenderTextEventsToBitmap(const Vector<LayoutTextEvent>& events, float x, float y, float w, float h, LayoutRenderingContext* rc, BitmapData pageBmp) {
@@ -388,15 +392,15 @@ void RenderTextEventsToBitmap(const Vector<LayoutTextEvent>& events, float x, fl
 		else if (ptr->IsLayoutTextEventChangeJustify()) {
 			currStyle.justification = ptr->AsLayoutTextEventChangeJustify().justification;
 			rc->PushStyle(currStyle);
-			currX = StartingXForJustification(x, w, lineInfo.Get(lineIndex).totalWidth, currStyle.justification);
-			// TODO: Force a new line here?
+			JustifyLineInfo info = StartingXForJustification(x, w, lineInfo.Get(lineIndex).totalWidth, currStyle.justification);
+			currX = info.startX;
 		}
 		else if (ptr->IsLayoutTextEventLineBreak()) {
 			// TODO: Advance new line
 			currY -= lineInfo.data[lineIndex].height;
 			lineIndex++;
-
-			currX = StartingXForJustification(x, w, lineInfo.Get(lineIndex).totalWidth, currStyle.justification);
+			JustifyLineInfo info = StartingXForJustification(x, w, lineInfo.Get(lineIndex).totalWidth, currStyle.justification);
+			currX = info.startX;
 		}
 		else if (ptr->IsLayoutTextEventPopStyle()) {
 			rc->PopStyle();

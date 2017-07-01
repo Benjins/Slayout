@@ -7,7 +7,9 @@ A layout engine for making documents I guess
 TODO:
  * ~~Better text layout, line breaks~~
  * ~~Text justification~~
+ * Full Justification
  * Better row algorithm
+ * Better hinting, avoid missing pixels
  * Align-y, also align-x centre, left, or right
  * Customizble anchors (right now just assumes upper-left)
  * Lines

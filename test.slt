@@ -1,10 +1,10 @@
 (text (name h) (contents (justify right 
 							(color #99AA77 "HDS  FDHH") "QWERTYUIOP"
 							(font "fonts/VeraBd.ttf" 8 "ASDFGH, eh sorta ") 
-							(font-size 18 "YO" (color #FF33FF (font-size 36 "O")) (color #555555 "O") "O") " ...sup")) 
+							(font-size 18 "YO" (color #FF33FF (font-size 60 "O")) (color #555555 "O") "O") " ...sup??"))
                (font-size 16)
                (width (/ (width page) 2)) 
-               (height 30) 
+               (height 60) 
                (y (- (height page) (margin-top page))))
                 
 (text (name h2) (contents "Another quick brown fox jumped dogs header: '!@#'.") 
@@ -35,13 +35,14 @@
 
 (rect (name rec) (y (/ (height page) 2)) (width (+ 10 (/ (width page) 8))) (height 70))
 
-(text (name rec-tex) (contents (justify centre "LDUF the only way out is forward I think therefore I am you know?")) (x (x rec)) (y (y rec)) (width (width rec)) (height (height rec)))
+(text (name rec-tex) (contents (justify centre "LDUF the only way out is forward I think therefore I am you know?")) (x (+ 60 (x rec))) (y (y rec)) (width (width rec)) (height (height rec)))
 
 (align-x (ref page) (item rec))
 
 (line (name l1) (from (x (+ 0 (x h))) (y 18)) 
 				(to (x (+ (x rec-tex) 40)) (y (- (y rec-tex) (height rec-tex))))
-				(width 8))
+				(width 8)
+				(color #FF44FF))
 
 (row (name r1)
      (padding 10)
