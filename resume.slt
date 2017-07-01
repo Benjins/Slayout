@@ -26,7 +26,7 @@
 		(width 210)
 		(height 65))
 		
-(beneath (top my-name) (bottom addr-info) (spacing -10))
+(beneath (top my-name) (bottom addr-info) (spacing -15))
 
 (text (name contact-1)
       (font-size 20)
@@ -46,6 +46,23 @@
 		(width 240)
 		(height 65))
 		
-(beneath (top my-name) (bottom contact-info) (spacing -10))
+(beneath (top my-name) (bottom contact-info) (spacing -15))
 		
+(text (name available)
+      (font-size 20)
+      (width (width my-name))
+	  (contents (justify centre "Available: Jan - Aug")))
+	  
+(text-fill available)
+
+(beneath (top my-name) (bottom available) (spacing 20))
+
+(align-x (ref page) (item available) (align centre))
+
+(line (name top-row-line)
+      (color #7788FF)
+      (from (x (margin-left page))
+	        (y (- (y contact-info) (height contact-info))))
+	  (to (x (- (width page) (margin-right page)))
+	      (y (- (y contact-info) (height contact-info)))))
 

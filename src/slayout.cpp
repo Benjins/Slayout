@@ -117,6 +117,12 @@ struct LayoutColumn {
 struct LayoutLine {
 	LayoutNodeIndex from;
 	LayoutNodeIndex to;
+
+	int color;
+
+	LayoutLine() {
+		color = 0xFFFFFFFF;
+	}
 };
 
 struct LayoutTextFill {
@@ -142,6 +148,26 @@ struct LayoutContext {
 	Vector<LayoutNode> nodes;
 	Vector<LayoutVerb> verbs;
 };
+
+bool ParseColor(SubString colorText, int* outColVal) {
+	ASSERT(outColVal != nullptr);
+	if (colorText.length > 1 && colorText.start[0] == '#') {
+		colorText.start++;
+		colorText.length--;
+		// TODO: Also length 3 colors
+		if (colorText.length == 6) {
+			// TODO: Validate we actually have a hex val
+			*outColVal = HexAtoi(StringStackBuffer<16>("%.*s", BNS_LEN_START(colorText)).buffer);
+			return true;
+		}
+		else {
+			return false;
+		}
+	}
+	else {
+		return false;
+	}
+}
 
 void InitLayoutContext(LayoutContext* ctx, float width, float height) {
 	LayoutPage page;
@@ -310,6 +336,20 @@ void LayoutContextSkeletonPass(const Vector<BNSexpr>& sexprs, LayoutContext* ctx
 				LayoutLine line;
 				line.from = ctx->nodes.count - 2;
 				line.to   = ctx->nodes.count - 1;
+
+				BNSexpr colSexpr;
+				if (ExtractSubSexprsByName(&args, "color", &colSexpr)) {
+					BNSexpr colSubSexpr;
+					if (MatchSexpr(&colSexpr, "(@{id})", { &colSubSexpr })) {
+						bool validColor = ParseColor(colSubSexpr.AsBNSexprIdentifier().identifier, &line.color);
+						ASSERT(validColor);
+					}
+					else {
+						// Invalid color mark
+						ASSERT(false);
+					}
+				}
+
 				ctx->verbs.PushBack(line);
 			}
 			else {
@@ -979,26 +1019,6 @@ LayoutSolverResult StepLayoutContextSolver(LayoutContext* ctx) {
 #include "slayout_gfx.cpp"
 #include "slayout_text.cpp"
 
-bool ParseColor(SubString colorText, int* outColVal) {
-	ASSERT(outColVal != nullptr);
-	if (colorText.length > 1 && colorText.start[0] == '#') {
-		colorText.start++;
-		colorText.length--;
-		// TODO: Also length 3 colors
-		if (colorText.length == 6) {
-			// TODO: Validate we actually have a hex val
-			*outColVal = HexAtoi(StringStackBuffer<16>("%.*s", BNS_LEN_START(colorText)).buffer);
-			return true;
-		}
-		else {
-			return false;
-		}
-	}
-	else {
-		return false;
-	}
-}
-
 SubString ChompQuotesOffString(SubString str) {
 	ASSERT(str.length >= 2);
 	ASSERT(str.start[0] == '"');
@@ -1178,6 +1198,7 @@ void RenderLayoutToBMP(LayoutContext* ctx, BitmapData* bmp){
 			float w = node->AsLayoutRect().width.AsLayoutValueSimple().val;
 			float h = node->AsLayoutRect().height.AsLayoutValueSimple().val;
 
+			/*
 			for (int i = 0; i < h; i++) {
 				bmp->data[((int)y - i) * bmp->width + (int)x] = 0xFF4488FF;
 				bmp->data[((int)y - i) * bmp->width + (int)x + (int)w] = 0xFF4488FF;
@@ -1187,6 +1208,7 @@ void RenderLayoutToBMP(LayoutContext* ctx, BitmapData* bmp){
 				bmp->data[(int)y * bmp->width + (int)x + i] = 0xFF4488FF;
 				bmp->data[((int)y - (int)h) * bmp->width + (int)x + i] = 0xFF4488FF;
 			}
+			*/
 
 			Vector<LayoutTextEvent> events;
 			bool good = ParseTextContentsForTextEvents(&ptr->AsLayoutTextNode().text, &events);
@@ -1226,7 +1248,9 @@ void RenderLayoutToBMP(LayoutContext* ctx, BitmapData* bmp){
 			int x1 = to->AsLayoutPoint().x.AsLayoutValueSimple().val;
 			int y1 = to->AsLayoutPoint().y.AsLayoutValueSimple().val;
 
-			DrawLine(*bmp, x0, bmp->height - y0, x1, bmp->height - y1, 3, 0xFF5577CC);
+			//ptr->AsLayoutLine().
+
+			DrawLine(*bmp, x0, y0, x1, y1, 3, ptr->AsLayoutLine().color);
 		}
 	}
 }
