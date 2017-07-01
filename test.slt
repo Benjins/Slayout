@@ -54,7 +54,7 @@
 
 (beneath (top r1) (bottom h2) (spacing 20))
 
-(text (name bt1) (width 210) (font-size 14) (contents "yo listen up here's the story about me and my life and holy gosh this world is lovely"))
+(text (name bt1) (width 210) (font-size 12) (contents "yo listen up here's the story about me and my life and holy gosh this world is lovely"))
 (text (name bt2) (width 420) (font-size 50) (contents "Huh. sekejethe story about me and my life ands world  is lovely"))
 (text (name bt3) (width 210) (font-size 14) (contents "Lol you cant distroy my spirit and it's basically a question of #f or nil"))
 

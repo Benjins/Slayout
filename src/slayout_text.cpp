@@ -335,10 +335,6 @@ void RenderTextToBitmap(const SubString& text, float* currX, float* currY,
 
 		*currX += xAdv;
 
-		if (*currX > startY + w) {
-			*currX = startX;
-		}
-
 		if (charBmp.data != nullptr) {
 			free(charBmp.data);
 		}
