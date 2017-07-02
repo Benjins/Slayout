@@ -13,6 +13,7 @@ TODO:
  * Better hinting, avoid missing pixels
  * Align-y, also align-x centre, left, or right
  * Customizble anchors (right now just assumes upper-left)
+ * Output to PDF
  * Lines
    - ~~Have lines~~
    - Line thickness
