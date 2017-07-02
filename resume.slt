@@ -60,9 +60,35 @@
 (align-x (ref page) (item available) (align centre))
 
 (line (name top-row-line)
-      (color #7788FF)
+      (color #99AAFF)
       (from (x (margin-left page))
 	        (y (- (y contact-info) (height contact-info))))
 	  (to (x (- (width page) (margin-right page)))
 	      (y (- (y contact-info) (height contact-info)))))
+		  
+(line (name centre-div-line)
+      (color #99AAFF)
+      (from (x (/ (width page) 2))
+	        (y (- (- (y contact-info) (height contact-info)) 10)))
+	  (to (x (/ (width page) 2))
+	      (y (margin-bottom page))))
 
+(text (name relev-exp)
+      (x (+ 10 (x addr-info)))
+	  (y (- (- (y contact-info) (height contact-info)) 20))
+	  (width 300)
+	  (font-size 24)
+      (contents (font "fonts/VeraBd.ttf" "Relevant Experience")))
+	  
+(text-fill relev-exp)
+
+(text (name vic-vis-header)
+      (x (+ 10 (x relev-exp)))
+	  (width (- (/ (width page) 2) 100))
+      (contents (font "fonts/VeraBd.ttf" "Associate Software Engineer, ")
+	            "Vicarious Visions"
+				(font "fonts/VeraIt.ttf" "Jan 2016 - August 2016")))
+				
+(text-fill vic-vis-header)
+(beneath (top relev-exp) (bottom vic-vis-header) (spacing 10))
+	  
