@@ -87,7 +87,7 @@
 	  (width (- (/ (width page) 2) 100))
       (contents (font "fonts/VeraBd.ttf" "Associate Software Engineer, ")
 	            "Vicarious Visions"
-				(font "fonts/VeraIt.ttf" "Jan 2016 - August 2016")))
+				(font "fonts/VeraIt.ttf" " Jan 2016 - August 2016")))
 				
 (text-fill vic-vis-header)
 (beneath (top relev-exp) (bottom vic-vis-header) (spacing 10))
